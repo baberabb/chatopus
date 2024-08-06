@@ -30,7 +30,7 @@ interface Reaction {
 
 interface Message {
   id: number;
-  text: string;
+  content: string;
   user: string;
   timestamp: string;
   reactions: Reaction;
@@ -249,7 +249,7 @@ const MessageContent: React.FC<MessageContentProps> = ({
   isStreaming,
 }) => {
   const { theme } = useZustandTheme();
-  if (!message || typeof message.text === "undefined") {
+  if (!message || typeof message.content === "undefined") {
     // info(`Rendering MessageContent with invalid message: ${JSON.stringify(message)}`);
     return <div>Error: Invalid message data</div>;
   }
@@ -289,7 +289,7 @@ const MessageContent: React.FC<MessageContentProps> = ({
             },
           }}
         >
-          {message.text}
+          {message.content}
         </ReactMarkdown>
         {isStreaming && message.user === "AI" && (
           <span className="inline-block animate-pulse">▋</span>
@@ -346,9 +346,9 @@ const MessageBlock: React.FC<MessageBlockProps> = ({
   );
 
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(message.text);
+    await navigator.clipboard.writeText(message.content);
     // You might want to add some feedback here, like a toast notification
-  }, [message.text]);
+  }, [message.content]);
 
   return (
     <div
@@ -510,11 +510,11 @@ const DiscordLikeChat: React.FC = () => {
         const newMessages = [...prevMessages];
         const lastMessage = newMessages[newMessages.length - 1];
         if (lastMessage.user === "AI") {
-          lastMessage.text = streamBuffer;
+          lastMessage.content = streamBuffer;
         } else {
           newMessages.push({
             id: Date.now(),
-            text: streamBuffer,
+            content: streamBuffer,
             user: "AI",
             timestamp: new Date().toLocaleTimeString(),
             reactions: { thumbsUp: 0 },
@@ -535,7 +535,7 @@ const DiscordLikeChat: React.FC = () => {
     if (input.trim() && !isStreaming) {
       const newMessage = {
         id: Date.now(),
-        text: input,
+        content: input,
         user: "You",
         timestamp: new Date().toLocaleTimeString(),
         reactions: { thumbsUp: 0 },
@@ -555,7 +555,8 @@ const DiscordLikeChat: React.FC = () => {
           ...prevMessages,
           {
             id: Date.now(),
-            text: "An error occurred while processing your message. Please try again.",
+            content:
+              "An error occurred while processing your message. Please try again.",
             user: "AI",
             timestamp: new Date().toLocaleTimeString(),
             reactions: { thumbsUp: 0 },
