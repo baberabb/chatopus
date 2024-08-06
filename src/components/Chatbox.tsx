@@ -19,8 +19,9 @@ import { Copy, Check, Play } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
-import { useTheme } from "@/ThemeContext";
-
+import { useZustandTheme } from "@/store.ts";
+import { atom, useAtom } from "jotai";
+import { trace, info, error, attachConsole } from "@tauri-apps/plugin-log";
 
 // Types
 interface Reaction {
@@ -106,17 +107,17 @@ interface MessageBlockProps {
 }
 const getInitials = (name: string): string => {
   try {
-    if (name.trim() === '') {
-      throw new Error('Invalid input');
+    if (name.trim() === "") {
+      throw new Error("Invalid input");
     }
 
     return name
-        .trim()
-        .split(" ")
-        .map((word) => word[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
+      .trim()
+      .split(" ")
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
   } catch (error) {
     return "UN";
   }
@@ -144,24 +145,27 @@ const UserAvatar: React.FC<UserAvatarProps> = ({ user, imageUrl }) => {
   const avatarColor = user ? getAvatarColor(user) : "bg-gray-500"; // Default color if user is undefined
 
   return (
-      <Avatar className="h-10 w-10 rounded-full overflow-hidden">
-        {imageUrl ? (
-            <AvatarImage src={imageUrl} alt={user || "User"} className="rounded-full" />
-        ) : (
-            <AvatarFallback
-                className={`${avatarColor} text-white flex h-full w-full items-center justify-center text-sm font-medium`}
-            >
-              {initials}
-            </AvatarFallback>
-        )}
-      </Avatar>
+    <Avatar className="h-10 w-10 rounded-full overflow-hidden">
+      {imageUrl ? (
+        <AvatarImage
+          src={imageUrl}
+          alt={user || "User"}
+          className="rounded-full"
+        />
+      ) : (
+        <AvatarFallback
+          className={`${avatarColor} text-white flex h-full w-full items-center justify-center text-sm font-medium`}
+        >
+          {initials}
+        </AvatarFallback>
+      )}
+    </Avatar>
   );
 };
 
-
 // CopyButton component with updated styling
 const CopyButton = ({ text }: { text: string }) => {
-  const { theme } = useTheme();
+  const { theme } = useZustandTheme();
   const [isCopied, setIsCopied] = useState(false);
 
   const copy = async () => {
@@ -191,7 +195,7 @@ interface CodeBlockProps {
 }
 
 const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
-  const { theme } = useTheme();
+  const { theme } = useZustandTheme();
   const [isRunning, setIsRunning] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
 
@@ -244,7 +248,13 @@ const MessageContent: React.FC<MessageContentProps> = ({
   message,
   isStreaming,
 }) => {
-  const { theme } = useTheme();
+  const { theme } = useZustandTheme();
+  if (!message || typeof message.text === "undefined") {
+    // info(`Rendering MessageContent with invalid message: ${JSON.stringify(message)}`);
+    return <div>Error: Invalid message data</div>;
+  }
+
+  // info(`Rendering MessageContent: ${message.id}, ${message.text}`);
 
   return (
     <div className="flex-1 min-w-0 overflow-hidden">
@@ -261,8 +271,9 @@ const MessageContent: React.FC<MessageContentProps> = ({
       </div>
       <div className="prose prose-slate dark:prose-invert prose-code:before:content-none prose-code:after:content-none max-w-none font-sans leading-relaxed tracking-normal break-words">
         <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkBreaks, remarkMath, ]}
+          remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
           components={{
+            // @ts-ignore
             code({ node, inline, className, children, ...props }) {
               const match = /language-(\w+)/.exec(className || "");
               return !inline && match ? (
@@ -293,7 +304,7 @@ const MessageContent: React.FC<MessageContentProps> = ({
 
 // ReactionCount component with updated styling
 const ReactionCount = ({ count }: { count: number }) => {
-  const { theme } = useTheme();
+  const { theme } = useZustandTheme();
 
   return (
     <div
@@ -324,7 +335,7 @@ const MessageBlock: React.FC<MessageBlockProps> = ({
   onReact,
   isStreaming,
 }) => {
-  const { theme } = useTheme();
+  const { theme } = useZustandTheme();
   const [isHovered, setIsHovered] = useState(false);
 
   const handleMouseEnter = useCallback(() => setIsHovered(true), []);
@@ -375,7 +386,6 @@ const MessageBlock: React.FC<MessageBlockProps> = ({
   );
 };
 
-
 // Message List Component
 const MessageList = React.forwardRef<
   HTMLDivElement,
@@ -385,7 +395,7 @@ const MessageList = React.forwardRef<
     isStreaming: boolean;
   }
 >(({ messages, onReact, isStreaming }, ref) => {
-  const { theme } = useTheme();
+  const { theme } = useZustandTheme();
   return (
     <div
       className="flex-1 overflow-y-auto py-4"
@@ -414,7 +424,7 @@ const InputArea: React.FC<{
   handleSend: () => void;
   isStreaming: boolean;
 }> = ({ input, setInput, handleSend, isStreaming }) => {
-  const { theme } = useTheme();
+  const { theme } = useZustandTheme();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -467,9 +477,10 @@ const InputArea: React.FC<{
     </div>
   );
 };
+
 // Main DiscordLikeChat Component
 const DiscordLikeChat: React.FC = () => {
-  const { theme } = useTheme();
+  const { theme } = useZustandTheme();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -477,10 +488,10 @@ const DiscordLikeChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    console.log("Component mounted");
+    // trace("Component mounted");
     invoke<Message[]>("get_chat_history")
       .then((history: Message[]) => setMessages(history))
-      .catch((error) => console.error("Error getting chat history:", error));
+      .catch((error) => info("Error getting chat history:", error));
 
     const unlisten = listen("stream-response", (event) => {
       const chunk = event.payload as string;
