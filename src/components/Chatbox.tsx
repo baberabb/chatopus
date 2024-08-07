@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  ErrorInfo,
-  useCallback,
-} from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { ThumbsUp, Plus, Gift, Smile } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -20,8 +14,46 @@ import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
 import { useZustandTheme } from "@/store.ts";
-import { atom, useAtom } from "jotai";
+// import { atom, useAtom } from "jotai";
+// @ts-ignore
 import { trace, info, error, attachConsole } from "@tauri-apps/plugin-log";
+import { create } from "zustand";
+import { useInView } from "react-intersection-observer";
+import { ulid } from "ulidx";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import TypingAnimation from "@/components/magicui/typing-animation.tsx";
+
+// taken from https://tuffstuff9.hashnode.dev/intuitive-scrolling-for-chatbot-message-streaming
+//use for scroll
+interface ChatScrollAnchorProps {
+  trackVisibility: boolean;
+  isAtBottom: boolean;
+  scrollAreaRef: React.RefObject<HTMLDivElement>;
+}
+
+export function ChatScrollAnchor({
+  trackVisibility,
+  isAtBottom,
+  scrollAreaRef,
+}: ChatScrollAnchorProps) {
+  const { ref, inView, entry } = useInView({
+    trackVisibility,
+    delay: 100,
+  });
+
+  React.useEffect(() => {
+    if (isAtBottom && trackVisibility && !inView) {
+      if (!scrollAreaRef.current) return;
+
+      const scrollAreaElement = scrollAreaRef.current;
+
+      scrollAreaElement.scrollTop =
+        scrollAreaElement.scrollHeight - scrollAreaElement.clientHeight;
+    }
+  }, [inView, entry, isAtBottom, trackVisibility]);
+
+  return <div ref={ref} className="h-px w-full" />;
+}
 
 // Types
 interface Reaction {
@@ -29,61 +61,11 @@ interface Reaction {
 }
 
 interface Message {
-  id: number;
+  id: string;
   content: string;
-  user: string;
+  role: string;
   timestamp: string;
   reactions: Reaction;
-}
-
-// Error Boundary
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-  errorInfo: ErrorInfo | null;
-}
-
-class ErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null, errorInfo: null };
-  }
-
-  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    this.setState({ errorInfo });
-    console.error("Caught an error:", error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="error-boundary p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-          <h1 className="text-xl font-bold mb-2">Something went wrong</h1>
-          <details className="whitespace-pre-wrap">
-            <summary className="cursor-pointer mb-2">
-              {this.state.error && this.state.error.toString()}
-            </summary>
-            <p className="mt-2">
-              {this.state.errorInfo && this.state.errorInfo.componentStack}
-            </p>
-          </details>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
 }
 
 interface UserAvatarProps {
@@ -102,7 +84,7 @@ interface ReactionButtonProps {
 
 interface MessageBlockProps {
   message: Message;
-  onReact: (messageId: number, reactionType: keyof Reaction) => void;
+  onReact: (messageId: string, reactionType: keyof Reaction) => void;
   isStreaming: boolean;
 }
 const getInitials = (name: string): string => {
@@ -244,13 +226,23 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
   );
 };
 
+interface MessageContentProps {
+  message: {
+    role: string;
+    content: string;
+    timestamp: string;
+    reactions?: { thumbsUp: number };
+  };
+  isStreaming: boolean;
+}
+
 const MessageContent: React.FC<MessageContentProps> = ({
   message,
   isStreaming,
 }) => {
   const { theme } = useZustandTheme();
+
   if (!message || typeof message.content === "undefined") {
-    // info(`Rendering MessageContent with invalid message: ${JSON.stringify(message)}`);
     return <div>Error: Invalid message data</div>;
   }
 
@@ -263,7 +255,7 @@ const MessageContent: React.FC<MessageContentProps> = ({
           className="text-sm font-medium mr-2"
           style={{ color: theme.text }}
         >
-          {message.user}
+          {message.role}
         </span>
         <span className="text-xs" style={{ color: theme.textSecondary }}>
           {message.timestamp}
@@ -273,7 +265,6 @@ const MessageContent: React.FC<MessageContentProps> = ({
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
           components={{
-            // @ts-ignore
             code({ node, inline, className, children, ...props }) {
               const match = /language-(\w+)/.exec(className || "");
               return !inline && match ? (
@@ -287,13 +278,11 @@ const MessageContent: React.FC<MessageContentProps> = ({
                 </code>
               );
             },
+            span: ({ node, ...props }) => <span {...props} />,
           }}
         >
-          {message.content}
+          {contentWithBlinker}
         </ReactMarkdown>
-        {isStreaming && message.user === "AI" && (
-          <span className="inline-block animate-pulse">▋</span>
-        )}
       </div>
       {message.reactions?.thumbsUp > 0 && (
         <ReactionCount count={message.reactions.thumbsUp} />
@@ -352,13 +341,13 @@ const MessageBlock: React.FC<MessageBlockProps> = ({
 
   return (
     <div
-      className="flex hover:bg-opacity-50 transition-colors duration-200 py-3 px-4"
+      className="flex hover:bg-opacity-50 transition-colors duration-200 py-3 px-4 hover:bg-transparent"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       style={{ backgroundColor: isHovered ? theme.surface : "transparent" }}
     >
       <div className="w-10 flex-shrink-0 flex justify-center">
-        <UserAvatar user={message.user} />
+        <UserAvatar user={message.role} />
       </div>
       <div className="flex-grow min-w-0 pl-3 pr-2">
         <div className="flex items-start">
@@ -391,11 +380,11 @@ const MessageList = React.forwardRef<
   HTMLDivElement,
   {
     messages: Message[];
-    onReact: (messageId: number, reactionType: keyof Reaction) => void;
-    isStreaming: boolean;
+    onReact: (messageId: string, reactionType: keyof Reaction) => void;
   }
->(({ messages, onReact, isStreaming }, ref) => {
+>(({ messages, onReact }, ref) => {
   const { theme } = useZustandTheme();
+  const { isStreaming } = useStreamingStore();
   return (
     <div
       className="flex-1 overflow-y-auto py-4"
@@ -403,7 +392,8 @@ const MessageList = React.forwardRef<
     >
       {messages.map((msg, index) => (
         <React.Fragment key={msg.id}>
-          {index > 0 && messages[index - 1].user !== msg.user && (
+          {/*This condition checks if it's not the first message (index > 0) and if the current message's user is different from the previous message's user. If both are true, it adds a spacing div.*/}
+          {index > 0 && messages[index - 1].role !== msg.role && (
             <div className="h-4" />
           )}
           <MessageBlock
@@ -422,9 +412,10 @@ const InputArea: React.FC<{
   input: string;
   setInput: React.Dispatch<React.SetStateAction<string>>;
   handleSend: () => void;
-  isStreaming: boolean;
-}> = ({ input, setInput, handleSend, isStreaming }) => {
+}> = ({ input, setInput, handleSend }) => {
   const { theme } = useZustandTheme();
+  const { isStreaming } = useStreamingStore();
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -463,7 +454,8 @@ const InputArea: React.FC<{
           onKeyPress={handleKeyPress}
           className="flex-1 bg-transparent p-3 focus:outline-none resize-none min-h-[44px] max-h-[200px] font-sans leading-tight overflow-y-auto"
           style={{ color: theme.text }}
-          placeholder="Message #language-model-chat"
+          // input area message
+          placeholder="yap!"
           rows={1}
           disabled={isStreaming}
         />
@@ -478,14 +470,37 @@ const InputArea: React.FC<{
   );
 };
 
+interface StreamingState {
+  isStreaming: boolean;
+  setIsStreaming: (isStreaming: boolean) => void;
+  messages: Message[];
+  setMessages: (
+    messages: Message[] | ((prevMessages: Message[]) => Message[]),
+  ) => void;
+}
+
+export const useStreamingStore = create<StreamingState>((set) => ({
+  isStreaming: false,
+  setIsStreaming: (isStreaming) => set({ isStreaming }),
+  messages: [],
+  setMessages: (messages) =>
+    set((state) => ({
+      messages:
+        typeof messages === "function" ? messages(state.messages) : messages,
+    })),
+}));
+
 // Main DiscordLikeChat Component
 const DiscordLikeChat: React.FC = () => {
   const { theme } = useZustandTheme();
+  const { isStreaming, setIsStreaming, messages, setMessages } =
+    useStreamingStore();
+
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
+  // const [messages, setMessages] = useState<Message[]>([]);
   const [streamBuffer, setStreamBuffer] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
 
   useEffect(() => {
     // trace("Component mounted");
@@ -509,13 +524,13 @@ const DiscordLikeChat: React.FC = () => {
       setMessages((prevMessages) => {
         const newMessages = [...prevMessages];
         const lastMessage = newMessages[newMessages.length - 1];
-        if (lastMessage.user === "AI") {
+        if (lastMessage.role === "AI") {
           lastMessage.content = streamBuffer;
         } else {
           newMessages.push({
-            id: Date.now(),
+            id: ulid(),
             content: streamBuffer,
-            user: "AI",
+            role: "AI",
             timestamp: new Date().toLocaleTimeString(),
             reactions: { thumbsUp: 0 },
           });
@@ -525,18 +540,35 @@ const DiscordLikeChat: React.FC = () => {
     }
   }, [streamBuffer, isStreaming]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const handleScroll = () => {
+    if (!scrollAreaRef.current) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+    const atBottom = scrollHeight - clientHeight <= scrollTop + 1;
+
+    setIsAtBottom(atBottom);
   };
 
-  useEffect(scrollToBottom, [messages]);
+  useEffect(() => {
+    if (isStreaming) {
+      if (!scrollAreaRef.current) return;
+
+      const scrollAreaElement = scrollAreaRef.current;
+
+      scrollAreaElement.scrollTop =
+        scrollAreaElement.scrollHeight - scrollAreaElement.clientHeight;
+
+      setIsAtBottom(true);
+    }
+  }, [isStreaming]);
 
   const handleSend = async () => {
-    if (input.trim() && !isStreaming) {
+    if (input && !isStreaming) {
+      // user names and input is set here
       const newMessage = {
-        id: Date.now(),
+        id: ulid(),
         content: input,
-        user: "You",
+        role: "You",
         timestamp: new Date().toLocaleTimeString(),
         reactions: { thumbsUp: 0 },
       };
@@ -554,10 +586,10 @@ const DiscordLikeChat: React.FC = () => {
         setMessages((prevMessages) => [
           ...prevMessages,
           {
-            id: Date.now(),
+            id: ulid(),
             content:
               "An error occurred while processing your message. Please try again.",
-            user: "AI",
+            role: "AI",
             timestamp: new Date().toLocaleTimeString(),
             reactions: { thumbsUp: 0 },
           },
@@ -568,7 +600,7 @@ const DiscordLikeChat: React.FC = () => {
     }
   };
 
-  const handleReact = (messageId: number, reactionType: keyof Reaction) => {
+  const handleReact = (messageId: string, reactionType: keyof Reaction) => {
     setMessages((prevMessages) =>
       prevMessages.map((msg) =>
         msg.id === messageId
@@ -591,19 +623,29 @@ const DiscordLikeChat: React.FC = () => {
         style={{ backgroundColor: theme.background, color: theme.text }}
       >
         <div className="flex-grow overflow-hidden flex flex-col">
-          <MessageList
-            messages={messages}
-            ref={messagesEndRef}
-            onReact={handleReact}
-            isStreaming={isStreaming}
-          />
+          <div
+            ref={scrollAreaRef}
+            className="flex-1 overflow-y-auto"
+            onScroll={handleScroll} // Attach the handleScroll function here
+          >
+            <MessageList messages={messages} onReact={handleReact} />
+            <ChatScrollAnchor
+              trackVisibility={isStreaming}
+              isAtBottom={isAtBottom}
+              scrollAreaRef={scrollAreaRef}
+            />
+            <ChatScrollAnchor
+              trackVisibility={isStreaming}
+              isAtBottom={isAtBottom}
+              scrollAreaRef={scrollAreaRef}
+            />
+          </div>
         </div>
         <div className="mt-auto">
           <InputArea
             input={input}
             setInput={setInput}
             handleSend={handleSend}
-            isStreaming={isStreaming}
           />
         </div>
       </div>
