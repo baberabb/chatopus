@@ -25,6 +25,7 @@ import {
 import { Button } from "./components/ui/button";
 import Settings from "./components/Settings";
 import { useZustandTheme } from "@/store";
+import Model from "@/components/ModelSettings.tsx";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onRouteChange }) => {
 
   const routes = [
     { name: "Chat", icon: MessageSquare },
-    { name: "Models", icon: Bot },
+    { name: "Model", icon: Bot },
     { name: "API", icon: Code2 },
     { name: "Documentation", icon: Book },
     { name: "Settings", icon: Settings2 },
@@ -151,9 +152,9 @@ const Header: React.FC<{ title: string }> = ({ title }) => {
   const { theme } = useZustandTheme();
   return (
     <header
-      className="sticky top-0 z-10 flex items-center gap-1 border-b px-4"
+      className="sticky top-0 z-10 flex items-center gap-1 border-b px-4 dark:bg-[#222628] "
       style={{
-        backgroundColor: theme.surface,
+        // backgroundColor: theme.surface,
         borderColor: theme.border,
         height: "53px", // Explicitly set height
         minHeight: "53px", // Ensure minimum height
@@ -191,7 +192,7 @@ const AppLayout: React.FC = () => {
 
   return (
     <div
-      className="flex h-screen w-full"
+      className="h-screen w-full"
       style={{ backgroundColor: theme.background, color: theme.text }}
     >
       <Sidebar isOpen={isSidebarOpen} onRouteChange={handleRouteChange} />
@@ -203,6 +204,7 @@ const AppLayout: React.FC = () => {
         <main className="flex-grow overflow-hidden">
           {currentView === "chat" && <DiscordLikeChat />}
           {currentView === "settings" && <Settings />}
+          {currentView === "model" && <Model />}
         </main>
       </div>
     </div>
@@ -211,10 +213,8 @@ const AppLayout: React.FC = () => {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    {/*<ThemeProvider>*/}
     <TooltipProvider>
       <AppLayout />
     </TooltipProvider>
-    {/*</ThemeProvider>*/}
   </React.StrictMode>,
 );
