@@ -1,5 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { ThumbsUp, Plus, Gift, Smile } from "lucide-react";
+import {
+  ThumbsUp,
+  // Plus,
+  // Gift,
+  // Smile,
+  Paperclip,
+  Zap,
+  CornerRightUp,
+  // ChevronDown,
+} from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "@/globals.css";
@@ -10,52 +19,21 @@ import "highlight.js/styles/atom-one-dark.css";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import { darcula } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { Copy, Check, Play } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
+// import { Avatar, AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
 import { useZustandTheme } from "@/store.ts";
+import Avatar from "@mui/material/Avatar";
+
 // import { atom, useAtom } from "jotai";
 // @ts-ignore
 import { trace, info, error, attachConsole } from "@tauri-apps/plugin-log";
 import { create } from "zustand";
-import { useInView } from "react-intersection-observer";
+// import { useInView } from "react-intersection-observer";
 import { ulid } from "ulidx";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import TypingAnimation from "@/components/magicui/typing-animation.tsx";
+// import TypingAnimation from "@/components/magicui/typing-animation.tsx";
 
-// taken from https://tuffstuff9.hashnode.dev/intuitive-scrolling-for-chatbot-message-streaming
-//use for scroll
-interface ChatScrollAnchorProps {
-  trackVisibility: boolean;
-  isAtBottom: boolean;
-  scrollAreaRef: React.RefObject<HTMLDivElement>;
-}
-
-export function ChatScrollAnchor({
-  trackVisibility,
-  isAtBottom,
-  scrollAreaRef,
-}: ChatScrollAnchorProps) {
-  const { ref, inView, entry } = useInView({
-    trackVisibility,
-    delay: 100,
-  });
-
-  React.useEffect(() => {
-    if (isAtBottom && trackVisibility && !inView) {
-      if (!scrollAreaRef.current) return;
-
-      const scrollAreaElement = scrollAreaRef.current;
-
-      scrollAreaElement.scrollTop =
-        scrollAreaElement.scrollHeight - scrollAreaElement.clientHeight;
-    }
-  }, [inView, entry, isAtBottom, trackVisibility]);
-
-  return <div ref={ref} className="h-px w-full" />;
-}
-
-// Types
 interface Reaction {
   thumbsUp: number;
 }
@@ -87,63 +65,60 @@ interface MessageBlockProps {
   onReact: (messageId: string, reactionType: keyof Reaction) => void;
   isStreaming: boolean;
 }
-const getInitials = (name: string): string => {
-  try {
-    if (name.trim() === "") {
-      throw new Error("Invalid input");
-    }
 
-    return name
-      .trim()
-      .split(" ")
-      .map((word) => word[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  } catch (error) {
-    return "UN";
+// from https://mui.com/material-ui/react-avatar/
+function stringToColor(string: string) {
+  let hash = 0;
+  let i;
+
+  /* eslint-disable no-bitwise */
+  for (i = 0; i < string.length; i += 1) {
+    hash = string.charCodeAt(i) + ((hash << 5) - hash);
   }
-};
 
-const getAvatarColor = (name: string) => {
-  const colors = [
-    "bg-red-500",
-    "bg-blue-500",
-    "bg-green-500",
-    "bg-yellow-500",
-    "bg-pink-500",
-    "bg-purple-500",
-    "bg-indigo-500",
-    "bg-teal-500",
-  ];
-  const index = name
-    .split("")
-    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[index % colors.length];
-};
+  let color = "#";
+
+  for (i = 0; i < 3; i += 1) {
+    const value = (hash >> (i * 8)) & 0xff;
+    color += `00${value.toString(16)}`.slice(-2);
+  }
+  /* eslint-enable no-bitwise */
+
+  return color;
+}
+
+function stringAvatar(name: string | undefined) {
+  if (!name) {
+    return {
+      sx: {
+        bgcolor: stringToColor("UN"),
+      },
+      children: "UN",
+    };
+  }
+
+  const nameParts = name.split(" ");
+  const initials =
+    nameParts.length >= 2
+      ? `${nameParts[0][0]}${nameParts[1][0]}`
+      : nameParts[0][0];
+
+  return {
+    sx: {
+      bgcolor: stringToColor(name),
+    },
+    children: initials,
+  };
+}
 
 const UserAvatar: React.FC<UserAvatarProps> = ({ user, imageUrl }) => {
-  const initials = getInitials(user);
-  const avatarColor = user ? getAvatarColor(user) : "bg-gray-500"; // Default color if user is undefined
-
-  return (
-    <Avatar className="h-10 w-10 rounded-full overflow-hidden">
-      {imageUrl ? (
-        <AvatarImage
-          src={imageUrl}
-          alt={user || "User"}
-          className="rounded-full"
-        />
-      ) : (
-        <AvatarFallback
-          className={`${avatarColor} text-white flex h-full w-full items-center justify-center text-sm font-medium`}
-        >
-          {initials}
-        </AvatarFallback>
-      )}
-    </Avatar>
+  return imageUrl ? (
+    <Avatar alt={user} src={imageUrl}></Avatar>
+  ) : (
+    <Avatar {...stringAvatar(user)} />
   );
 };
+
 
 // CopyButton component with updated styling
 const CopyButton = ({ text }: { text: string }) => {
@@ -227,12 +202,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
 };
 
 interface MessageContentProps {
-  message: {
-    role: string;
-    content: string;
-    timestamp: string;
-    reactions?: { thumbsUp: number };
-  };
+  message: Message;
   isStreaming: boolean;
 }
 
@@ -265,6 +235,7 @@ const MessageContent: React.FC<MessageContentProps> = ({
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
           components={{
+            // @ts-ignore
             code({ node, inline, className, children, ...props }) {
               const match = /language-(\w+)/.exec(className || "");
               return !inline && match ? (
@@ -278,11 +249,13 @@ const MessageContent: React.FC<MessageContentProps> = ({
                 </code>
               );
             },
-            span: ({ node, ...props }) => <span {...props} />,
           }}
         >
-          {contentWithBlinker}
+          {message.content}
         </ReactMarkdown>
+        {isStreaming && message.role === "AI" && (
+          <span className="inline-block animate-pulse">▋</span>
+        )}
       </div>
       {message.reactions?.thumbsUp > 0 && (
         <ReactionCount count={message.reactions.thumbsUp} />
@@ -329,6 +302,7 @@ const MessageBlock: React.FC<MessageBlockProps> = ({
 
   const handleMouseEnter = useCallback(() => setIsHovered(true), []);
   const handleMouseLeave = useCallback(() => setIsHovered(false), []);
+
   const handleReact = useCallback(
     () => onReact(message.id, "thumbsUp"),
     [onReact, message.id],
@@ -375,6 +349,12 @@ const MessageBlock: React.FC<MessageBlockProps> = ({
   );
 };
 
+interface MessageListProps {
+  messages: Message[];
+  onReact: (messageId: string, reactionType: keyof Reaction) => void;
+  isStreaming: boolean;
+}
+
 // Message List Component
 const MessageList = React.forwardRef<
   HTMLDivElement,
@@ -385,6 +365,14 @@ const MessageList = React.forwardRef<
 >(({ messages, onReact }, ref) => {
   const { theme } = useZustandTheme();
   const { isStreaming } = useStreamingStore();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(scrollToBottom, [messages]);
+
   return (
     <div
       className="flex-1 overflow-y-auto py-4"
@@ -404,10 +392,11 @@ const MessageList = React.forwardRef<
         </React.Fragment>
       ))}
       <div ref={ref} />
+      <div ref={messagesEndRef} />
     </div>
   );
 });
-// Input Area Component
+
 const InputArea: React.FC<{
   input: string;
   setInput: React.Dispatch<React.SetStateAction<string>>;
@@ -439,31 +428,34 @@ const InputArea: React.FC<{
   }, [input]);
 
   return (
-    <div className="px-4 pb-4 pt-2">
+    <div className="fixed bottom-0 left-0 right-0 px-4 pb-4 input-area-outdiv bg-opacity-80 backdrop-blur-sm pt-0">
       <div
         className="flex items-end rounded-lg"
-        style={{ backgroundColor: theme.surface }}
+        style={{
+          backgroundColor: theme.surface,
+          boxShadow: `0 2px 4px -2px ${theme.shadowColor}, 0 1px 2px -1px ${theme.shadowColor}`,
+        }}
       >
-        <button className="p-3 text-gray-400 hover:text-white transition-colors">
-          <Plus size={20} />
+        <button className="p-3 text-gray-400 hover:text-white transition-colors input-area-innerdiv">
+          <Paperclip size={20} />
         </button>
         <textarea
           ref={textareaRef}
           value={input}
           onChange={handleInputChange}
           onKeyPress={handleKeyPress}
-          className="flex-1 bg-transparent p-3 focus:outline-none resize-none min-h-[44px] max-h-[200px] font-sans leading-tight overflow-y-auto"
+          className="flex-1 bg-transparent p-3 focus:outline-none resize-none min-h-[44px] max-h-[200px] font-sans leading-tight overflow-y-auto input-area-textarea"
           style={{ color: theme.text }}
-          // input area message
           placeholder="yap!"
           rows={1}
           disabled={isStreaming}
         />
-        <button className="p-3 text-gray-400 hover:text-white transition-colors">
-          <Gift size={20} />
-        </button>
-        <button className="p-3 text-gray-400 hover:text-white transition-colors">
-          <Smile size={20} />
+        <button
+          className="p-3 text-gray-400 hover:text-white transition-colors"
+          onClick={handleSend}
+          disabled={isStreaming}
+        >
+          {isStreaming ? <Zap size={20} /> : <CornerRightUp size={20} />}
         </button>
       </div>
     </div>
@@ -499,8 +491,7 @@ const DiscordLikeChat: React.FC = () => {
   const [input, setInput] = useState("");
   // const [messages, setMessages] = useState<Message[]>([]);
   const [streamBuffer, setStreamBuffer] = useState("");
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const [isAtBottom, setIsAtBottom] = useState<boolean>(true);
+  const messageListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // trace("Component mounted");
@@ -539,28 +530,6 @@ const DiscordLikeChat: React.FC = () => {
       });
     }
   }, [streamBuffer, isStreaming]);
-
-  const handleScroll = () => {
-    if (!scrollAreaRef.current) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
-    const atBottom = scrollHeight - clientHeight <= scrollTop + 1;
-
-    setIsAtBottom(atBottom);
-  };
-
-  useEffect(() => {
-    if (isStreaming) {
-      if (!scrollAreaRef.current) return;
-
-      const scrollAreaElement = scrollAreaRef.current;
-
-      scrollAreaElement.scrollTop =
-        scrollAreaElement.scrollHeight - scrollAreaElement.clientHeight;
-
-      setIsAtBottom(true);
-    }
-  }, [isStreaming]);
 
   const handleSend = async () => {
     if (input && !isStreaming) {
@@ -615,31 +584,18 @@ const DiscordLikeChat: React.FC = () => {
       ),
     );
   };
-
   return (
     <ErrorBoundary>
       <div
         className="flex flex-col h-full"
         style={{ backgroundColor: theme.background, color: theme.text }}
       >
-        <div className="flex-grow overflow-hidden flex flex-col">
-          <div
-            ref={scrollAreaRef}
-            className="flex-1 overflow-y-auto"
-            onScroll={handleScroll} // Attach the handleScroll function here
-          >
-            <MessageList messages={messages} onReact={handleReact} />
-            <ChatScrollAnchor
-              trackVisibility={isStreaming}
-              isAtBottom={isAtBottom}
-              scrollAreaRef={scrollAreaRef}
-            />
-            <ChatScrollAnchor
-              trackVisibility={isStreaming}
-              isAtBottom={isAtBottom}
-              scrollAreaRef={scrollAreaRef}
-            />
-          </div>
+        <div className="flex-grow overflow-hidden flex flex-col pb-10">
+          <MessageList
+            ref={messageListRef}
+            messages={messages}
+            onReact={handleReact}
+          />
         </div>
         <div className="mt-auto">
           <InputArea
