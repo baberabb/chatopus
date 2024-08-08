@@ -1,3 +1,4 @@
 [submodule "runtimed"]
-	path = runtimed
-	url = https://github.com/runtimed/runtimed.git
+    path = runtimed
+    url = https://github.com/baberabb/runtimed.git
+    branch = dev
