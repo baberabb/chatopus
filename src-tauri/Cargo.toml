@@ -17,6 +17,7 @@ tauri-build = { version = "2.0.0-rc", features = [] }
 [dependencies]
 tauri = { version = "2.0.0-rc", features = [] }
 tauri-plugin-shell = "2.0.0-rc"
+tauri-plugin-log = "2.0.0-rc"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "^0.12", features = ["json"] }
@@ -27,4 +28,12 @@ runtimed = {  path = "../runtimed/runtimed" }
 tokio = "1.39.2"
 anyhow = "1.0.86"
 tabled = "0.15.0"
+tauri-plugin-localhost = "2.0.0-rc"
+tauri-plugin-store = "2.0.0-rc"
+tauri-plugin-sql = {version = "2.0.0-rc.0", features = ["sqlite"] }
+
+
+#[dependencies.tauri-plugin-sql]
+#features = ["sqlite"] # or "postgres", or "mysql"
+#version = "2.0.0-rc"
 

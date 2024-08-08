@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, {useState, useRef, useEffect, useCallback, useMemo} from "react";
 import {
   ThumbsUp,
   // Plus,
@@ -29,10 +29,10 @@ import Avatar from "@mui/material/Avatar";
 // @ts-ignore
 import { trace, info, error, attachConsole } from "@tauri-apps/plugin-log";
 import { create } from "zustand";
-// import { useInView } from "react-intersection-observer";
+import { useInView } from "react-intersection-observer";
 import { ulid } from "ulidx";
 import ErrorBoundary from "@/components/ErrorBoundary";
-// import TypingAnimation from "@/components/magicui/typing-animation.tsx";
+import TypingAnimation from "@/components/magicui/typing-animation.tsx";
 
 interface Reaction {
   thumbsUp: number;
@@ -112,10 +112,13 @@ function stringAvatar(name: string | undefined) {
 }
 
 const UserAvatar: React.FC<UserAvatarProps> = ({ user, imageUrl }) => {
+  const user_ = user.toLowerCase();
+  const avatarProps = useMemo(() => stringAvatar(user_), [user_]);
+
   return imageUrl ? (
-    <Avatar alt={user} src={imageUrl}></Avatar>
+      <Avatar alt={user} src={imageUrl}></Avatar>
   ) : (
-    <Avatar {...stringAvatar(user)} />
+      <Avatar {...avatarProps} />
   );
 };
 
@@ -253,7 +256,7 @@ const MessageContent: React.FC<MessageContentProps> = ({
         >
           {message.content}
         </ReactMarkdown>
-        {isStreaming && message.role === "AI" && (
+        {isStreaming && message.role === "assistant" && (
           <span className="inline-block animate-pulse">▋</span>
         )}
       </div>
@@ -443,7 +446,7 @@ const InputArea: React.FC<{
           ref={textareaRef}
           value={input}
           onChange={handleInputChange}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleKeyPress}
           className="flex-1 bg-transparent p-3 focus:outline-none resize-none min-h-[44px] max-h-[200px] font-sans leading-tight overflow-y-auto input-area-textarea"
           style={{ color: theme.text }}
           placeholder="yap!"
@@ -515,13 +518,13 @@ const DiscordLikeChat: React.FC = () => {
       setMessages((prevMessages) => {
         const newMessages = [...prevMessages];
         const lastMessage = newMessages[newMessages.length - 1];
-        if (lastMessage.role === "AI") {
+        if (lastMessage.role === "assistant") {
           lastMessage.content = streamBuffer;
         } else {
           newMessages.push({
             id: ulid(),
             content: streamBuffer,
-            role: "AI",
+            role: "assistant",
             timestamp: new Date().toLocaleTimeString(),
             reactions: { thumbsUp: 0 },
           });
@@ -537,7 +540,7 @@ const DiscordLikeChat: React.FC = () => {
       const newMessage = {
         id: ulid(),
         content: input,
-        role: "You",
+        role: "user",
         timestamp: new Date().toLocaleTimeString(),
         reactions: { thumbsUp: 0 },
       };
@@ -558,7 +561,7 @@ const DiscordLikeChat: React.FC = () => {
             id: ulid(),
             content:
               "An error occurred while processing your message. Please try again.",
-            role: "AI",
+            role: "assistant",
             timestamp: new Date().toLocaleTimeString(),
             reactions: { thumbsUp: 0 },
           },

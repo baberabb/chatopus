@@ -7,13 +7,16 @@ pub struct SentMessage {
     pub content: String,
 }
 
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AnthropicRequest {
     pub model: String,
     pub messages: Vec<SentMessage>,
-    // pub system: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system: Option<String>,
     pub max_tokens: u32,
     pub stream: bool,
+   
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
