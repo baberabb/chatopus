@@ -12,25 +12,25 @@ name = "chatopus_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.0.1", features = [] }
+tauri-build = { version = "2.0.3", features = [] }
 
 [dependencies]
-tauri = { version = "2.0.3", features = [] }
-tauri-plugin-shell = "2.0.1"
-tauri-plugin-log = "2.0.1"
+tauri = { version = "2.1.1", features = [] }
+tauri-plugin-shell = "2.0.2"
+tauri-plugin-log = "2.0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "^0.12", features = ["json"] }
 parking_lot = "*"
 futures-util = "0.3.31"
-runtimelib = {  path = "../runtimed/runtimelib" }
-runtimed = {  path = "../runtimed/runtimed" }
-tokio = "1.40"
-anyhow = "1.0.89"
-tabled = "0.16.0"
+#runtimelib = {  path = "../runtimed/runtimelib" }
+#runtimed = {  path = "../runtimed/runtimed" }
+tokio = "1.41"
+anyhow = "1.0.93"
+#tabled = "0.16.0"
 tauri-plugin-localhost = "2.0.1"
-tauri-plugin-store = "2.0.1"
-tauri-plugin-sql = {version = "2.0.1", features = ["sqlite"] }
+tauri-plugin-store = "2.1.0"
+tauri-plugin-sql = {version = "2.0.2", features = ["sqlite"] }
 
 
 #[dependencies.tauri-plugin-sql]
