@@ -1,5 +1,9 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+import tailwindcssAnimate from "tailwindcss-animate";
+import tailwindTypography from "@tailwindcss/typography";
+import daisyui from 'daisyui';
+
+export default {
   darkMode: ["class"],
   content: ["./index.html", "./src/**/*.{ts,tsx}", "./src/*.{ts,tsx}"],
   prefix: "",
@@ -98,6 +102,6 @@ module.exports = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography"), require('daisyui')],
+  plugins: [tailwindcssAnimate, tailwindTypography, daisyui],
 
 }
