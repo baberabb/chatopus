@@ -169,10 +169,6 @@ const Header: React.FC<{ title: string; toggleSidebar: () => void }> = ({
         >
           {title}
         </h1>
-        <Button variant="outline" size="sm" className="ml-auto gap-1.5 text-sm">
-          <Share className="size-3.5" style={{ color: theme.text }} />
-          Share
-        </Button>
       </header>
   );
 };

@@ -29,10 +29,8 @@ import Avatar from "@mui/material/Avatar";
 // @ts-ignore
 import { trace, info, error, attachConsole } from "@tauri-apps/plugin-log";
 import { create } from "zustand";
-import { useInView } from "react-intersection-observer";
 import { ulid } from "ulidx";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import TypingAnimation from "@/components/magicui/typing-animation.tsx";
 
 interface Reaction {
   thumbsUp: number;
