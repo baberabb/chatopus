@@ -3,7 +3,7 @@ use crate::config::ConfigState;
 use parking_lot;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{Emitter, Manager, State};
+use tauri::{Emitter, State};
 
 #[derive(Serialize, Deserialize)]
 pub struct Response {
