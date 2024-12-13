@@ -1,13 +1,33 @@
 import * as React from "react";
-import { useEffect, useState, type FC } from "react";
 import { createRoot } from "react-dom/client";
-import DiscordLikeChat from "@/components/Chatbox";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
-import Settings from "@/components/Settings";
 import { useZustandTheme } from "@/store";
-import Model from "@/components/ModelSettings";
+import SidebarLayout from "@/components/sidebar-09";
 
+const App = () => {
+  const { theme } = useZustandTheme();
+
+  React.useEffect(() => {
+    document.body.style.backgroundColor = theme.background;
+    document.body.style.color = theme.text;
+  }, [theme]);
+
+  return <SidebarLayout />;
+};
+
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("Root element not found");
+
+createRoot(rootElement).render(
+  <React.StrictMode>
+    <TooltipProvider>
+      <App />
+    </TooltipProvider>
+  </React.StrictMode>
+);
+
+/* Original layout preserved for reference:
 const AppLayout: FC = () => {
   const [currentView, setCurrentView] = useState<"chat" | "settings" | "model">(
     "chat"
@@ -34,14 +54,4 @@ const AppLayout: FC = () => {
     </div>
   );
 };
-
-const rootElement = document.getElementById("root");
-if (!rootElement) throw new Error("Root element not found");
-
-createRoot(rootElement).render(
-  <React.StrictMode>
-    <TooltipProvider>
-      <AppLayout />
-    </TooltipProvider>
-  </React.StrictMode>
-);
+*/
