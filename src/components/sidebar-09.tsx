@@ -32,8 +32,6 @@ import { TrashContent } from "./TrashContent";
 import { ThemeToggle } from "./ThemeToggle";
 import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
 import { useZustandTheme } from "@/store";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { cn } from "@/lib/utils";
 
 interface ArchivedChat {
   id: string;
@@ -101,6 +99,7 @@ export default function Page() {
           "--sidebar-width": "350px",
           backgroundColor: theme.background,
           color: theme.text,
+          "--border-color": theme.border, // Add this line to expose border color to the sidebar
         } as React.CSSProperties
       }
     >
@@ -183,7 +182,10 @@ function AppSidebar({
           borderColor: theme.border,
         }}
       >
-        <SidebarHeader className="gap-3.5 border-b p-4">
+        <SidebarHeader
+          className="gap-3.5 border-b p-4"
+          style={{ borderColor: theme.border }}
+        >
           <div className="flex w-full items-center justify-between">
             <div className="text-base font-medium">Chat Archive</div>
             <div className="flex items-center space-x-2">
