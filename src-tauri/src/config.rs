@@ -7,6 +7,7 @@ pub struct ProviderSettings {
     pub api_key: String,
     pub model: String,
     pub max_tokens: u32,
+    pub streaming: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -24,6 +25,7 @@ impl Default for AppConfig {
                 api_key: String::new(),
                 model: "claude-3-5-sonnet-20240620".to_string(),
                 max_tokens: 1024,
+                streaming: true,
             },
         );
 

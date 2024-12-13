@@ -30,6 +30,16 @@ struct Delta {
     text: Option<String>,
 }
 
+#[derive(Deserialize, Debug)]
+struct NonStreamingResponse {
+    content: Vec<ContentBlock>,
+}
+
+#[derive(Deserialize, Debug)]
+struct ContentBlock {
+    text: String,
+}
+
 impl AnthropicProvider {
     pub fn new(config: ProviderConfig) -> Self {
         Self {
@@ -42,7 +52,11 @@ impl AnthropicProvider {
 
 #[async_trait]
 impl ChatProvider for AnthropicProvider {
-    async fn send_message(
+    fn supports_streaming(&self) -> bool {
+        true // Anthropic supports streaming
+    }
+
+    async fn send_message_streaming(
         &self,
         messages: Vec<Message>,
         callback: StreamCallback,
@@ -106,5 +120,39 @@ impl ChatProvider for AnthropicProvider {
         }
 
         Ok(full_response)
+    }
+
+    async fn send_message_blocking(&self, messages: Vec<Message>) -> Result<String, String> {
+        let client = Client::new();
+        let request_body = AnthropicRequest {
+            model: self.model.clone(),
+            messages,
+            max_tokens: self.max_tokens,
+            stream: false,
+        };
+
+        let response = client
+            .post("https://api.anthropic.com/v1/messages")
+            .header("Content-Type", "application/json")
+            .header("X-API-Key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to send request: {}", e))?;
+
+        let response_data = response
+            .json::<NonStreamingResponse>()
+            .await
+            .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+        let full_text = response_data
+            .content
+            .into_iter()
+            .map(|block| block.text)
+            .collect::<Vec<_>>()
+            .join("");
+
+        Ok(full_text)
     }
 }

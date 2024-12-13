@@ -19,11 +19,30 @@ pub type StreamCallback = Box<dyn Fn(StreamResponse) + Send + Sync + 'static>;
 
 #[async_trait]
 pub trait ChatProvider: Send + Sync {
-    async fn send_message(
+    // Check if provider supports streaming
+    fn supports_streaming(&self) -> bool;
+
+    // Streaming version
+    async fn send_message_streaming(
         &self,
         messages: Vec<Message>,
         callback: StreamCallback,
     ) -> Result<String, String>;
+
+    // Non-streaming version
+    async fn send_message_blocking(&self, messages: Vec<Message>) -> Result<String, String>;
+
+    // Main entry point that handles both streaming and non-streaming
+    async fn send_message(
+        &self,
+        messages: Vec<Message>,
+        callback: Option<StreamCallback>,
+    ) -> Result<String, String> {
+        match (self.supports_streaming(), callback) {
+            (true, Some(cb)) => self.send_message_streaming(messages, cb).await,
+            _ => self.send_message_blocking(messages).await,
+        }
+    }
 }
 
 pub struct ProviderConfig {

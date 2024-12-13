@@ -356,6 +356,12 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
 
   const handleSend = async () => {
     if (input && !isStreaming) {
+      // Get current config to check if streaming is enabled before doing anything else
+      const config = await invoke<any>("get_config");
+      const streamingEnabled =
+        config.providers[config.active_provider].streaming;
+      console.log("DEBUG: Streaming enabled:", streamingEnabled);
+
       const newMessage: Message = {
         id: ulid(),
         content: input,
@@ -365,11 +371,33 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
       };
       setMessages((prevMessages) => [...prevMessages, newMessage]);
       setInput("");
-      setIsStreaming(true);
-      setStreamBuffer("");
 
       try {
-        await invoke("process_message", { message: input });
+        // Only set streaming state if it's enabled in settings
+        if (streamingEnabled) {
+          setStreamBuffer("");
+          setIsStreaming(true);
+        }
+
+        const response = await invoke<{ reply: string }>("process_message", {
+          message: input,
+        });
+        console.log("DEBUG: Response received:", response);
+
+        // Handle non-streaming response - only add message if streaming is disabled
+        if (!streamingEnabled && response && response.reply) {
+          console.log("DEBUG: Adding non-streaming response");
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            {
+              id: ulid(),
+              content: response.reply,
+              role: "assistant",
+              timestamp: new Date().toLocaleTimeString(),
+              reactions: { thumbsUp: 0 },
+            },
+          ]);
+        }
       } catch (error) {
         console.error("Error in process_message:", error);
         setMessages((prevMessages) => [

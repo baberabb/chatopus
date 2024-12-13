@@ -4,6 +4,7 @@ import { Card } from "./ui/card";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { Switch } from "./ui/switch";
 import {
   Select,
   SelectContent,
@@ -16,6 +17,7 @@ interface ProviderSettings {
   api_key: string;
   model: string;
   max_tokens: number;
+  streaming: boolean;
 }
 
 interface AppConfig {
@@ -33,6 +35,7 @@ export function ModelSettings() {
         api_key: "",
         model: "claude-3-5-sonnet-20240620",
         max_tokens: 1024,
+        streaming: true,
       },
     },
   });
@@ -66,7 +69,7 @@ export function ModelSettings() {
   const handleSettingChange = (
     provider: string,
     setting: keyof ProviderSettings,
-    value: string | number
+    value: string | number | boolean
   ) => {
     setConfig((prev) => ({
       ...prev,
@@ -156,6 +159,17 @@ export function ModelSettings() {
                   )
                 }
               />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id={`${provider}-streaming`}
+                checked={settings.streaming}
+                onCheckedChange={(checked) =>
+                  handleSettingChange(provider, "streaming", checked)
+                }
+              />
+              <Label htmlFor={`${provider}-streaming`}>Enable Streaming</Label>
             </div>
 
             <Button
