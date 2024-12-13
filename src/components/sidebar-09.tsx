@@ -1,6 +1,6 @@
 import * as React from "react";
 import { BadgeCheck, Bell, Command, LogOut, Sparkles } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,8 +9,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Label } from "@/components/ui/label";
+} from "./ui/dropdown-menu";
+import { Label } from "./ui/label";
 import {
   Sidebar,
   SidebarContent,
@@ -24,14 +24,15 @@ import {
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
-} from "@/components/ui/sidebar";
-import { Switch } from "@/components/ui/switch";
+} from "./ui/sidebar";
+import { Switch } from "./ui/switch";
 import { ChatContainer } from "./ChatContainer";
 import { SidebarNavigation } from "./SidebarNavigation";
 import { TrashContent } from "./TrashContent";
+import Settings from "./Settings";
 import { ThemeToggle } from "./ThemeToggle";
 import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
-import { useZustandTheme } from "@/store";
+import { useZustandTheme } from "../store";
 
 interface ArchivedChat {
   id: string;
@@ -86,9 +87,9 @@ const data = {
 };
 
 export default function Page() {
-  const [activeContent, setActiveContent] = React.useState<"inbox" | "trash">(
-    "inbox"
-  );
+  const [activeContent, setActiveContent] = React.useState<
+    "inbox" | "trash" | "settings"
+  >("inbox");
   const [selectedChat, setSelectedChat] = React.useState<ArchivedChat>();
   const { theme } = useZustandTheme();
 
@@ -99,7 +100,7 @@ export default function Page() {
           "--sidebar-width": "350px",
           backgroundColor: theme.background,
           color: theme.text,
-          "--border-color": theme.border, // Add this line to expose border color to the sidebar
+          "--border-color": theme.border,
         } as React.CSSProperties
       }
     >
@@ -110,8 +111,10 @@ export default function Page() {
       <SidebarInset className="flex flex-col h-[calc(100vh-64px)]">
         {activeContent === "inbox" ? (
           <ChatContainer selectedArchivedChat={selectedChat} />
-        ) : (
+        ) : activeContent === "trash" ? (
           <TrashContent />
+        ) : (
+          <Settings />
         )}
       </SidebarInset>
     </SidebarProvider>
@@ -119,7 +122,7 @@ export default function Page() {
 }
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  setActiveContent: (content: "inbox" | "trash") => void;
+  setActiveContent: (content: "inbox" | "trash" | "settings") => void;
   setSelectedChat: (chat: ArchivedChat | undefined) => void;
 }
 

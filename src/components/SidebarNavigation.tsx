@@ -1,12 +1,12 @@
-import React from 'react'
-import { ArchiveX, File, Inbox, Send, Trash2 } from 'lucide-react'
+import React from "react";
+import { ArchiveX, File, Inbox, Send, Settings, Trash2 } from "lucide-react";
 import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@/components/ui/sidebar"
+} from "./ui/sidebar";
 
 const navItems = [
   {
@@ -14,40 +14,55 @@ const navItems = [
     url: "#",
     icon: Inbox,
     isActive: true,
+    content: "inbox",
   },
   {
     title: "Drafts",
     url: "#",
     icon: File,
     isActive: false,
+    content: "inbox",
   },
   {
     title: "Sent",
     url: "#",
     icon: Send,
     isActive: false,
+    content: "inbox",
   },
   {
     title: "Junk",
     url: "#",
     icon: ArchiveX,
     isActive: false,
+    content: "inbox",
   },
   {
     title: "Trash",
     url: "#",
     icon: Trash2,
     isActive: false,
+    content: "trash",
   },
-]
+  {
+    title: "Settings",
+    url: "#",
+    icon: Settings,
+    isActive: false,
+    content: "settings",
+  },
+];
 
 interface SidebarNavigationProps {
-  setActiveContent: (content: 'inbox' | 'trash') => void
-  setOpen: (open: boolean) => void
+  setActiveContent: (content: "inbox" | "trash" | "settings") => void;
+  setOpen: (open: boolean) => void;
 }
 
-export function SidebarNavigation({ setActiveContent, setOpen }: SidebarNavigationProps) {
-  const [activeItem, setActiveItem] = React.useState(navItems[0])
+export function SidebarNavigation({
+  setActiveContent,
+  setOpen,
+}: SidebarNavigationProps) {
+  const [activeItem, setActiveItem] = React.useState(navItems[0]);
 
   return (
     <SidebarGroup>
@@ -61,13 +76,11 @@ export function SidebarNavigation({ setActiveContent, setOpen }: SidebarNavigati
                   hidden: false,
                 }}
                 onClick={() => {
-                  setActiveItem(item)
-                  setOpen(true)
-                  if (item.title === 'Trash') {
-                    setActiveContent('trash')
-                  } else {
-                    setActiveContent('inbox')
-                  }
+                  setActiveItem(item);
+                  setOpen(true);
+                  setActiveContent(
+                    item.content as "inbox" | "trash" | "settings"
+                  );
                 }}
                 isActive={activeItem.title === item.title}
                 className="px-2.5 md:px-2"
@@ -80,6 +93,5 @@ export function SidebarNavigation({ setActiveContent, setOpen }: SidebarNavigati
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
-  )
+  );
 }
-

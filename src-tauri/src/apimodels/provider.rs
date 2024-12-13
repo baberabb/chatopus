@@ -14,12 +14,15 @@ pub struct StreamResponse {
     pub is_done: bool,
 }
 
+// Type alias for the callback function
+pub type StreamCallback = Box<dyn Fn(StreamResponse) + Send + Sync + 'static>;
+
 #[async_trait]
 pub trait ChatProvider: Send + Sync {
     async fn send_message(
         &self,
         messages: Vec<Message>,
-        callback: Box<dyn Fn(StreamResponse) + Send>,
+        callback: StreamCallback,
     ) -> Result<String, String>;
 }
 

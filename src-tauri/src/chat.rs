@@ -1,8 +1,9 @@
 use crate::apimodels::{Message, ProviderConfig, ProviderFactory, StreamResponse};
+use crate::config::ConfigState;
 use parking_lot;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 
 #[derive(Serialize, Deserialize)]
 pub struct Response {
@@ -15,8 +16,8 @@ pub struct ChatHistory(pub Arc<parking_lot::Mutex<Vec<Message>>>);
 pub async fn process_message(
     message: String,
     chat_history: State<'_, ChatHistory>,
+    config_state: State<'_, ConfigState>,
     window: tauri::Window,
-    app_handle: tauri::AppHandle,
 ) -> Result<Response, String> {
     println!("Received message: {}", message);
 
@@ -29,25 +30,40 @@ pub async fn process_message(
         history.clone()
     };
 
-    // Create provider config (this could come from settings)
-    let config = ProviderConfig {
-        api_key: "".to_string(), // Get from secure storage
-        model: "claude-3-5-sonnet-20240620".to_string(),
-        max_tokens: 1024,
-    };
+    // Get current provider config and clone necessary values
+    let (provider_type, provider_config) = {
+        let config = config_state.0.lock();
+        let provider_settings = config
+            .providers
+            .get(&config.active_provider)
+            .ok_or_else(|| "No provider configured".to_string())?;
 
-    // Create provider (could be configurable)
-    let provider = ProviderFactory::create_provider("anthropic", config)?;
+        (
+            config.active_provider.clone(),
+            ProviderConfig {
+                api_key: provider_settings.api_key.clone(),
+                model: provider_settings.model.clone(),
+                max_tokens: provider_settings.max_tokens,
+            },
+        )
+    }; // Lock is dropped here
+
+    // Create provider using active provider from config
+    let provider = ProviderFactory::create_provider(&provider_type, provider_config)?;
 
     // Create callback for streaming responses
-    let window_clone = window.clone();
-    let callback = Box::new(move |response: StreamResponse| {
-        if !response.text.is_empty() {
-            window_clone
-                .emit("stream-response", &response.text)
-                .expect("Failed to emit event");
-        }
-    });
+    let window = Arc::new(parking_lot::Mutex::new(window));
+    let callback = {
+        let window = Arc::clone(&window);
+        Box::new(move |response: StreamResponse| {
+            if !response.text.is_empty() {
+                window
+                    .lock()
+                    .emit("stream-response", &response.text)
+                    .expect("Failed to emit event");
+            }
+        }) as Box<dyn Fn(StreamResponse) + Send + Sync + 'static>
+    };
 
     // Send message and get response
     let full_response = provider.send_message(history, callback).await?;

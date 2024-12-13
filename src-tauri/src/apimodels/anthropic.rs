@@ -1,4 +1,4 @@
-use super::provider::{ChatProvider, Message, ProviderConfig, StreamResponse};
+use super::provider::{ChatProvider, Message, ProviderConfig, StreamCallback, StreamResponse};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use reqwest::Client;
@@ -45,7 +45,7 @@ impl ChatProvider for AnthropicProvider {
     async fn send_message(
         &self,
         messages: Vec<Message>,
-        callback: Box<dyn Fn(StreamResponse) + Send>,
+        callback: StreamCallback,
     ) -> Result<String, String> {
         let client = Client::new();
         let request_body = AnthropicRequest {
