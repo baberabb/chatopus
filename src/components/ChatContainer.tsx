@@ -40,32 +40,18 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import {
-  ThumbsUp,
-  Paperclip,
-  Zap,
-  CornerRightUp,
-  Copy,
-  Check,
-  Play,
-} from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks";
-import remarkMath from "remark-math";
-import SyntaxHighlighter from "react-syntax-highlighter";
-import { darcula } from "react-syntax-highlighter/dist/esm/styles/hljs";
-import "highlight.js/styles/atom-one-dark.css";
-import { useZustandTheme, useChatStore, Message } from "../store";
-import Avatar from "@mui/material/Avatar";
-import { create } from "zustand";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { ThumbsUp, Paperclip, Zap, CornerRightUp, Copy } from "lucide-react";
 import { ulid } from "ulidx";
+import { create } from "zustand";
 import ErrorBoundary from "./ErrorBoundary";
 import { ErrorDisplay } from "./ErrorDisplay";
 import { useModel } from "../contexts/ModelContext";
 import { ModelSelector } from "./ModelSelector";
 import { cn } from "../lib/utils";
+import { useZustandTheme, useChatStore, Message } from "../store";
+import { MessageContent } from "./MessageContent";
+import Avatar from "@mui/material/Avatar";
 
 /**
  * Interface representing an archived chat entry
@@ -83,9 +69,20 @@ interface ChatContainerProps {
   selectedArchivedChat?: ArchivedChat;
 }
 
-/**
- * Helper function to generate consistent colors for avatars based on string input
- */
+interface StreamingState {
+  isStreaming: boolean;
+  activeModelId: string | null;
+  setIsStreaming: (isStreaming: boolean) => void;
+  setActiveModelId: (modelId: string | null) => void;
+}
+
+const useStreamingStore = create<StreamingState>((set) => ({
+  isStreaming: false,
+  activeModelId: null,
+  setIsStreaming: (isStreaming) => set({ isStreaming }),
+  setActiveModelId: (modelId) => set({ activeModelId: modelId }),
+}));
+
 function stringToColor(string: string) {
   let hash = 0;
   for (let i = 0; i < string.length; i++) {
@@ -99,9 +96,6 @@ function stringToColor(string: string) {
   return color;
 }
 
-/**
- * Helper function to generate avatar properties based on user name
- */
 function stringAvatar(name: string | undefined) {
   if (!name) {
     return {
@@ -119,30 +113,23 @@ function stringAvatar(name: string | undefined) {
     children: initials,
   };
 }
-
-/**
- * Zustand store interface for managing streaming state
- */
-interface StreamingState {
-  isStreaming: boolean;
-  setIsStreaming: (isStreaming: boolean) => void;
+interface UserAvatarProps {
+  user: string;
+  imageUrl?: string;
+  model?: {
+    id: string;
+    name: string;
+    provider: string;
+  };
 }
-
-const useStreamingStore = create<StreamingState>((set) => ({
-  isStreaming: false,
-  setIsStreaming: (isStreaming) => set({ isStreaming }),
-}));
-
-/**
- * UserAvatar Component
- * Renders an avatar for a user with either an image or generated initials
- */
-const UserAvatar: React.FC<{ user: string; imageUrl?: string }> = ({
-  user,
-  imageUrl,
-}) => {
-  const user_ = user.toLowerCase();
-  const avatarProps = React.useMemo(() => stringAvatar(user_), [user_]);
+const UserAvatar: React.FC<UserAvatarProps> = ({ user, imageUrl, model }) => {
+  const displayName = model
+    ? `${model.name} (${model.provider})`
+    : user.toLowerCase();
+  const avatarProps = React.useMemo(
+    () => stringAvatar(displayName),
+    [displayName]
+  );
   return imageUrl ? (
     <Avatar alt={user} src={imageUrl} />
   ) : (
@@ -150,172 +137,12 @@ const UserAvatar: React.FC<{ user: string; imageUrl?: string }> = ({
   );
 };
 
-/**
- * CopyButton Component
- * Provides copy functionality with visual feedback
- */
-const CopyButton = ({ text }: { text: string }) => {
-  const { theme } = useZustandTheme();
-  const [isCopied, setIsCopied] = useState(false);
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(text);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  };
-
-  return (
-    <button
-      onClick={copy}
-      className="absolute top-2 right-2 p-1 rounded bg-opacity-50 hover:bg-opacity-75 transition-colors"
-      style={{ backgroundColor: theme.surface }}
-    >
-      {isCopied ? (
-        <Check size={16} className="text-green-400" />
-      ) : (
-        <Copy size={16} className="text-gray-300" />
-      )}
-    </button>
-  );
-};
-
-/**
- * CodeBlock Component
- * Renders code with syntax highlighting and provides execution capability
- */
-const CodeBlock: React.FC<{ language: string; value: string }> = ({
-  language,
-  value,
-}) => {
-  const { theme } = useZustandTheme();
-  const [isRunning, setIsRunning] = useState(false);
-  const [output, setOutput] = useState<string | null>(null);
-
-  const runCode = async () => {
-    setIsRunning(true);
-    setOutput(null);
-    try {
-      const result = await invoke("run_code", { code: value });
-      setOutput(result as string);
-    } catch (error) {
-      console.error("Error running code:", error);
-      setOutput(`Error: ${error}`);
-    }
-    setIsRunning(false);
-  };
-
-  const codeWithOutput = output ? `${value}\n\n// Output:\n${output}` : value;
-
-  return (
-    <div className="relative font-mono text-sm">
-      <SyntaxHighlighter
-        style={darcula}
-        language={language}
-        PreTag="div"
-        customStyle={{
-          backgroundColor: theme.surface,
-          padding: "1rem",
-          borderRadius: "0.375rem",
-        }}
-      >
-        {codeWithOutput}
-      </SyntaxHighlighter>
-      <CopyButton text={codeWithOutput} />
-      <button
-        onClick={runCode}
-        className="absolute top-2 right-12 p-1 rounded bg-opacity-50 hover:bg-opacity-75 transition-colors"
-        style={{ backgroundColor: theme.surface }}
-      >
-        <Play
-          size={16}
-          className={isRunning ? "text-yellow-400" : "text-gray-300"}
-        />
-      </button>
-    </div>
-  );
-};
-
-/**
- * MessageContent Component
- * Renders the content of a message with markdown support
- */
-const MessageContent: React.FC<{ message: Message; isStreaming: boolean }> = ({
-  message,
-  isStreaming,
-}) => {
-  const { theme } = useZustandTheme();
-
-  return (
-    <div className="flex-1 min-w-0 overflow-hidden">
-      <div className="flex items-baseline mb-1">
-        <span
-          className="text-sm font-medium mr-2"
-          style={{ color: theme.text }}
-        >
-          {message.role}
-        </span>
-        <span className="text-xs" style={{ color: theme.textSecondary }}>
-          {message.timestamp}
-        </span>
-      </div>
-      <div className="prose prose-slate dark:prose-invert prose-code:before:content-none prose-code:after:content-none max-w-none font-sans leading-relaxed tracking-normal break-words">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
-          components={{
-            // @ts-ignore
-            code({
-              className,
-              children,
-              ...props
-            }: {
-              className?: string;
-              children: React.ReactNode;
-            }) {
-              const match = /language-(\w+)/.exec(className || "");
-              const inline = !match;
-              return !inline ? (
-                <CodeBlock language={match[1]} value={String(children)} />
-              ) : (
-                <code
-                  className={`${className} bg-slate-100 dark:bg-slate-800 rounded px-1 py-0.5`}
-                  {...props}
-                >
-                  {children}
-                </code>
-              );
-            },
-          }}
-        >
-          {message.content}
-        </ReactMarkdown>
-        {isStreaming && message.role === "assistant" && (
-          <span className="inline-block animate-pulse">▋</span>
-        )}
-      </div>
-      {message.reactions && message.reactions.thumbsUp > 0 && (
-        <div
-          className="mt-2 inline-flex items-center rounded-full px-2 py-1"
-          style={{ backgroundColor: theme.surface }}
-        >
-          <ThumbsUp size={14} className="text-yellow-400 mr-1" />
-          <span className="text-xs" style={{ color: theme.text }}>
-            {message.reactions.thumbsUp}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/**
- * MessageBlock Component
- * Renders a complete message block with avatar, content, and interaction buttons
- */
 const MessageBlock: React.FC<{
   message: Message;
   onReact: (messageId: string) => void;
   isStreaming: boolean;
-}> = ({ message, onReact, isStreaming }) => {
+  isActiveModel: boolean;
+}> = ({ message, onReact, isStreaming, isActiveModel }) => {
   const { theme } = useZustandTheme();
   const [isHovered, setIsHovered] = useState(false);
 
@@ -327,11 +154,19 @@ const MessageBlock: React.FC<{
       style={{ backgroundColor: isHovered ? theme.surface : "transparent" }}
     >
       <div className="w-10 flex-shrink-0 flex justify-center">
-        <UserAvatar user={message.role} />
+        <UserAvatar user={message.role} model={message.model} />
       </div>
       <div className="flex-grow min-w-0 pl-3 pr-2">
         <div className="flex items-start">
-          <MessageContent message={message} isStreaming={isStreaming} />
+          <MessageContent
+            message={{
+              role: message.role,
+              content: message.content,
+              timestamp: message.timestamp,
+              model: message.model,
+            }}
+            isStreaming={isStreaming && isActiveModel}
+          />
           <div className="flex-shrink-0 w-12 flex space-x-1">
             {!isStreaming && (
               <>
@@ -361,19 +196,13 @@ const MessageBlock: React.FC<{
   );
 };
 
-/**
- * ChatContainer Component
- * Main component that orchestrates the entire chat interface
- */
 export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   const { theme } = useZustandTheme();
   const { selectedModels } = useModel();
-  const { isStreaming, setIsStreaming } = useStreamingStore();
-  const { messages, addMessage, updateLastMessage, setMessages } =
-    useChatStore();
+  const { isStreaming, activeModelId, setIsStreaming, setActiveModelId } =
+    useStreamingStore();
+  const { messages, addMessage, setMessages } = useChatStore();
   const [input, setInput] = useState("");
-  const [streamBuffer, setStreamBuffer] = useState("");
-  const messageListRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<{
     message: string;
     details?: string;
@@ -382,20 +211,18 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(
     null
   );
+  const messageListRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when new messages arrive
   useEffect(() => {
     if (messageListRef.current) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Load chat history on mount
   useEffect(() => {
     const loadChatHistory = async () => {
       try {
         const history = await invoke<Message[]>("get_chat_history");
-        // Add missing properties to each message
         const formattedHistory = history.map((msg) => ({
           ...msg,
           id: ulid(),
@@ -413,7 +240,6 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
     }
   }, [setMessages, selectedArchivedChat]);
 
-  // Effect to handle archived chat selection
   useEffect(() => {
     if (selectedArchivedChat) {
       const archivedMessage: Message = {
@@ -427,102 +253,107 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
     }
   }, [selectedArchivedChat, setMessages]);
 
-  useEffect(() => {
-    const unlisten = listen("stream-response", (event) => {
-      const chunk = event.payload as string;
-      setStreamBuffer((prevBuffer) => prevBuffer + chunk);
-    });
-
-    return () => {
-      unlisten.then((f) => f());
-    };
-  }, []);
-
-  useEffect(() => {
-    if (isStreaming && streamBuffer) {
-      updateLastMessage(streamBuffer);
-    }
-  }, [streamBuffer, isStreaming, updateLastMessage]);
+  const updateMessage = useCallback(
+    (messageId: string, updateFn: (prevContent: string) => string) => {
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, content: updateFn(msg.content) }
+            : msg
+        )
+      );
+    },
+    [setMessages]
+  );
 
   const processMessage = async (
     messageText: string,
     existingMessageId?: string
   ) => {
+    let unlistenFn: UnlistenFn | undefined;
+
     try {
       setError(null);
-      // Get current config to check if streaming is enabled before doing anything else
       const config = await invoke<any>("get_config");
       const streamingEnabled =
         config.providers[config.active_provider].streaming;
       console.log("DEBUG: Streaming enabled:", streamingEnabled);
 
-      // Only set streaming state if it's enabled in settings
+      // Create message IDs for each model upfront
+      const modelMessageIds = selectedModels.reduce(
+        (acc, model) => {
+          acc[model.id] = ulid();
+          return acc;
+        },
+        {} as { [key: string]: string }
+      );
+
       if (streamingEnabled) {
-        setStreamBuffer("");
         setIsStreaming(true);
-        if (existingMessageId) {
-          // Update existing message for retry
-          const messageIndex = messages.findIndex(
-            (msg) => msg.id === existingMessageId
-          );
-          if (messageIndex !== -1) {
-            const updatedMessages = [...messages];
-            updatedMessages[messageIndex] = {
-              ...updatedMessages[messageIndex],
-              content: "",
-            };
-            setMessages(updatedMessages);
-          }
-        } else {
-          // Add new message for first attempt
+
+        // Create placeholder messages for each selected model
+        selectedModels.forEach((model) => {
           addMessage({
-            id: ulid(),
+            id: modelMessageIds[model.id],
             content: "",
             role: "assistant",
             timestamp: new Date().toLocaleTimeString(),
+            model: {
+              id: model.id,
+              name: model.name,
+              provider: model.provider,
+            },
             reactions: { thumbsUp: 0 },
           });
-        }
+        });
+
+        // Listen for model-specific streaming responses
+        unlistenFn = await listen<{ modelId: string; chunk: string }>(
+          "stream-response",
+          (event) => {
+            const { modelId, chunk } = event.payload;
+            const messageId = modelMessageIds[modelId];
+            if (messageId) {
+              setActiveModelId(modelId);
+              updateMessage(messageId, (prevContent) => prevContent + chunk);
+            }
+          }
+        );
       }
 
-      // Convert selected models to format expected by backend
       const selectedModelsForBackend = selectedModels.map((model) => ({
         id: model.id,
         provider: model.provider,
       }));
 
-      const response = await invoke<{ reply: string }>("process_message", {
-        message: messageText,
-        selectedModels: selectedModelsForBackend,
-      });
+      const response = await invoke<{ replies: { [key: string]: string } }>(
+        "process_message",
+        {
+          message: messageText,
+          selectedModels: selectedModelsForBackend,
+        }
+      );
       console.log("DEBUG: Response received:", response);
 
-      // Handle non-streaming response - only add/update message if streaming is disabled
-      if (!streamingEnabled && response && response.reply) {
-        console.log("DEBUG: Adding non-streaming response");
-        if (existingMessageId) {
-          // Update existing message for retry
-          const messageIndex = messages.findIndex(
-            (msg) => msg.id === existingMessageId
-          );
-          if (messageIndex !== -1) {
-            const updatedMessages = [...messages];
-            updatedMessages[messageIndex] = {
-              ...updatedMessages[messageIndex],
-              content: response.reply,
-            };
-            setMessages(updatedMessages);
+      if (!streamingEnabled && response && response.replies) {
+        // Add individual messages for each model's response
+        Object.entries(response.replies).forEach(([modelId, reply]) => {
+          const model = selectedModels.find((m) => m.id === modelId);
+          if (model) {
+            addMessage({
+              id: modelMessageIds[modelId],
+              content: reply,
+              role: "assistant",
+              timestamp: new Date().toLocaleTimeString(),
+              model: {
+                id: model.id,
+                name: model.name,
+                provider: model.provider,
+              },
+              reactions: { thumbsUp: 0 },
+            });
           }
-        } else {
-          // Add new message for first attempt
-          addMessage({
-            id: ulid(),
-            content: response.reply,
-            role: "assistant",
-            timestamp: new Date().toLocaleTimeString(),
-            reactions: { thumbsUp: 0 },
-          });
-        }
+        });
       }
     } catch (error: any) {
       console.error("Error in process_message:", error);
@@ -533,7 +364,11 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
         details: errorDetails,
       });
     } finally {
+      if (unlistenFn) {
+        unlistenFn();
+      }
       setIsStreaming(false);
+      setActiveModelId(null);
       setRetryingMessageId(null);
     }
   };
@@ -573,8 +408,8 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   };
 
   const handleReact = (messageId: string) => {
-    setMessages(
-      messages.map((msg) =>
+    setMessages((prevMessages) =>
+      prevMessages.map((msg) =>
         msg.id === messageId
           ? {
               ...msg,
@@ -588,13 +423,14 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
     );
   };
 
+  // Rest of the component remains the same...
+
   return (
     <ErrorBoundary>
       <div
         className="relative h-full"
         style={{ backgroundColor: theme.background, color: theme.text }}
       >
-        {/* Model header */}
         <div
           className="absolute top-0 left-0 right-0 h-14 flex items-center px-4 bg-opacity-80 backdrop-blur-sm z-10"
           style={{
@@ -605,7 +441,6 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
           <ModelSelector />
         </div>
 
-        {/* Message list with updated top padding for taller header */}
         <div className="absolute inset-0 top-14 bottom-[76px] overflow-hidden">
           <div
             className="h-full overflow-y-auto py-4 px-4"
@@ -614,13 +449,17 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
           >
             {messages.map((msg, index) => (
               <React.Fragment key={msg.id}>
-                {index > 0 && messages[index - 1].role !== msg.role && (
-                  <div className="h-4" />
-                )}
+                {index > 0 &&
+                  (messages[index - 1].role !== msg.role ||
+                    (messages[index - 1].role === "assistant" &&
+                      messages[index - 1].model?.id !== msg.model?.id)) && (
+                    <div className="h-4" />
+                  )}
                 <MessageBlock
                   message={msg}
                   onReact={handleReact}
-                  isStreaming={isStreaming && index === messages.length - 1}
+                  isStreaming={isStreaming}
+                  isActiveModel={msg.model?.id === activeModelId}
                 />
               </React.Fragment>
             ))}
@@ -634,7 +473,6 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
           </div>
         </div>
 
-        {/* Input area fixed at the bottom */}
         <div
           className="absolute bottom-0 left-0 right-0 bg-opacity-80 backdrop-blur-sm"
           style={{

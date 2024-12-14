@@ -20,8 +20,13 @@ interface Theme {
 export interface Message {
   id: string;
   content: string;
-  role: string;
+  role: "user" | "assistant";
   timestamp: string;
+  model?: {
+    id: string;
+    name: string;
+    provider: string;
+  };
   reactions?: {
     thumbsUp: number;
   };
@@ -29,7 +34,7 @@ export interface Message {
 
 interface ChatStore {
   messages: Message[];
-  setMessages: (messages: Message[]) => void;
+  setMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   addMessage: (message: Message) => void;
   updateLastMessage: (content: string) => void;
   clearMessages: () => void;
@@ -152,7 +157,9 @@ const useThemeStore = create<ThemeStore>((set) => {
 
 export const useChatStore = create<ChatStore>((set) => ({
   messages: [],
-  setMessages: (messages) => set({ messages }),
+  setMessages: (messages) => set((state) => ({ 
+    messages: typeof messages === 'function' ? messages(state.messages) : messages 
+  })),
   addMessage: (message) => set((state) => ({ 
     messages: [...state.messages, message] 
   })),
