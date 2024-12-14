@@ -53,7 +53,7 @@ pub trait ChatProvider: Send + Sync {
         }
     }
 }
-
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProviderConfig {
     pub api_key: String,
     pub model: String,

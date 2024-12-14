@@ -64,6 +64,8 @@ import { ulid } from "ulidx";
 import ErrorBoundary from "./ErrorBoundary";
 import { ErrorDisplay } from "./ErrorDisplay";
 import { useModel } from "../contexts/ModelContext";
+import { ModelSelector } from "./ModelSelector";
+import { cn } from "../lib/utils";
 
 /**
  * Interface representing an archived chat entry
@@ -365,7 +367,7 @@ const MessageBlock: React.FC<{
  */
 export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   const { theme } = useZustandTheme();
-  const { currentModel } = useModel();
+  const { selectedModels } = useModel();
   const { isStreaming, setIsStreaming } = useStreamingStore();
   const { messages, addMessage, updateLastMessage, setMessages } =
     useChatStore();
@@ -380,6 +382,13 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(
     null
   );
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   // Load chat history on mount
   useEffect(() => {
@@ -476,8 +485,15 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
         }
       }
 
+      // Convert selected models to format expected by backend
+      const selectedModelsForBackend = selectedModels.map((model) => ({
+        id: model.id,
+        provider: model.provider,
+      }));
+
       const response = await invoke<{ reply: string }>("process_message", {
         message: messageText,
+        selectedModels: selectedModelsForBackend,
       });
       console.log("DEBUG: Response received:", response);
 
@@ -523,7 +539,7 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   };
 
   const handleSend = async () => {
-    if (input && !isStreaming) {
+    if (input && !isStreaming && selectedModels.length > 0) {
       const newMessage: Message = {
         id: ulid(),
         content: input,
@@ -580,19 +596,17 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
       >
         {/* Model header */}
         <div
-          className="absolute top-0 left-0 right-0 h-10 flex items-center px-4 bg-opacity-80 backdrop-blur-sm z-10"
+          className="absolute top-0 left-0 right-0 h-14 flex items-center px-4 bg-opacity-80 backdrop-blur-sm z-10"
           style={{
             backgroundColor: theme.surface,
             borderBottom: `1px solid ${theme.border}`,
           }}
         >
-          <span className="text-sm font-medium" style={{ color: theme.text }}>
-            {currentModel?.name || "No model selected"}
-          </span>
+          <ModelSelector />
         </div>
 
-        {/* Message list with top and bottom padding to prevent content being hidden */}
-        <div className="absolute inset-0 top-10 bottom-[76px] overflow-hidden">
+        {/* Message list with updated top padding for taller header */}
+        <div className="absolute inset-0 top-14 bottom-[76px] overflow-hidden">
           <div
             className="h-full overflow-y-auto py-4 px-4"
             style={{ backgroundColor: theme.background }}
@@ -650,14 +664,23 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
                 }}
                 className="flex-1 bg-transparent p-3 focus:outline-none resize-none min-h-[44px] max-h-[200px] font-sans leading-tight overflow-y-auto"
                 style={{ color: theme.text }}
-                placeholder="Type a message..."
+                placeholder={
+                  selectedModels.length > 0
+                    ? `Message ${selectedModels.map((m) => m.name).join(", ")}`
+                    : "Select models to start chatting..."
+                }
                 rows={1}
-                disabled={isStreaming}
+                disabled={isStreaming || selectedModels.length === 0}
               />
               <button
-                className="p-3 text-gray-400 hover:text-white transition-colors"
+                className={cn(
+                  "p-3 transition-colors",
+                  selectedModels.length > 0
+                    ? "text-gray-400 hover:text-white"
+                    : "text-gray-600 cursor-not-allowed"
+                )}
                 onClick={handleSend}
-                disabled={isStreaming}
+                disabled={isStreaming || selectedModels.length === 0}
               >
                 {isStreaming ? <Zap size={20} /> : <CornerRightUp size={20} />}
               </button>
