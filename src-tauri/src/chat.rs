@@ -1,13 +1,23 @@
-use crate::apimodels::{Message, ProviderConfig, ProviderFactory, StreamResponse};
+use crate::apimodels::{
+    Message, MessageReactions, ProviderConfig, ProviderFactory, StreamResponse,
+};
 use crate::config::ConfigState;
+use chrono;
 use parking_lot;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{Emitter, State};
+use ulid::Ulid;
 
 #[derive(Serialize, Deserialize)]
 pub struct Response {
     reply: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ErrorResponse {
+    message: String,
+    details: Option<String>,
 }
 
 pub struct ChatHistory(pub Arc<parking_lot::Mutex<Vec<Message>>>);
@@ -18,15 +28,20 @@ pub async fn process_message(
     chat_history: State<'_, ChatHistory>,
     config_state: State<'_, ConfigState>,
     window: tauri::Window,
-) -> Result<Response, String> {
+) -> Result<Response, ErrorResponse> {
     println!("Received message: {}", message);
 
     let history = {
         let mut history = chat_history.0.lock();
-        history.push(Message {
+        // Create a new user message with the same format as frontend messages
+        let user_message = Message {
+            id: Ulid::new().to_string(),
             role: "user".to_string(),
             content: message.clone(),
-        });
+            timestamp: chrono::Local::now().format("%I:%M %p").to_string(),
+            reactions: Some(MessageReactions { thumbs_up: 0 }),
+        };
+        history.push(user_message.clone());
         history.clone()
     };
 
@@ -36,7 +51,10 @@ pub async fn process_message(
         let provider_settings = config
             .providers
             .get(&config.active_provider)
-            .ok_or_else(|| "No provider configured".to_string())?;
+            .ok_or_else(|| ErrorResponse {
+                message: "Provider configuration error".to_string(),
+                details: Some("No provider configured".to_string()),
+            })?;
 
         println!(
             "DEBUG: Streaming enabled in config: {}",
@@ -55,7 +73,14 @@ pub async fn process_message(
     }; // Lock is dropped here
 
     // Create provider using active provider from config
-    let provider = ProviderFactory::create_provider(&provider_type, provider_config)?;
+    let provider =
+        ProviderFactory::create_provider(&provider_type, provider_config).map_err(|e| {
+            ErrorResponse {
+                message: "Provider initialization failed".to_string(),
+                details: Some(e),
+            }
+        })?;
+
     println!(
         "DEBUG: Provider supports streaming: {}",
         provider.supports_streaming()
@@ -78,22 +103,43 @@ pub async fn process_message(
         };
 
         // Send message with streaming
-        provider.send_message(history, Some(callback)).await?
+        provider
+            .send_message(history, Some(callback))
+            .await
+            .map_err(|e| {
+                println!("DEBUG: Streaming error: {}", e);
+                ErrorResponse {
+                    message: "API request failed".to_string(),
+                    details: Some(e),
+                }
+            })?
     } else {
         println!("DEBUG: Using non-streaming mode");
         // Send message without streaming
-        let response = provider.send_message(history, None).await?;
+        let response = provider.send_message(history, None).await.map_err(|e| {
+            println!("DEBUG: Non-streaming error: {}", e);
+            ErrorResponse {
+                message: "API request failed".to_string(),
+                details: Some(e),
+            }
+        })?;
         println!("DEBUG: Non-streaming response received: {}", response);
         response
     };
 
     println!("DEBUG: Final response: {}", full_response);
 
-    // Update chat history
-    chat_history.0.lock().push(Message {
+    // Create assistant message with the same format as frontend messages
+    let assistant_message = Message {
+        id: Ulid::new().to_string(),
         role: "assistant".to_string(),
         content: full_response.clone(),
-    });
+        timestamp: chrono::Local::now().format("%I:%M %p").to_string(),
+        reactions: Some(MessageReactions { thumbs_up: 0 }),
+    };
+
+    // Update chat history with the assistant's response
+    chat_history.0.lock().push(assistant_message);
 
     Ok(Response {
         reply: full_response,
@@ -103,12 +149,12 @@ pub async fn process_message(
 #[tauri::command]
 pub async fn get_chat_history(
     chat_history: State<'_, ChatHistory>,
-) -> Result<Vec<Message>, String> {
+) -> Result<Vec<Message>, ErrorResponse> {
     Ok(chat_history.0.lock().clone())
 }
 
 #[tauri::command]
-pub async fn clear_chat_history(chat_history: State<'_, ChatHistory>) -> Result<(), String> {
+pub async fn clear_chat_history(chat_history: State<'_, ChatHistory>) -> Result<(), ErrorResponse> {
     chat_history.0.lock().clear();
     Ok(())
 }

@@ -22,6 +22,7 @@ import Avatar from "@mui/material/Avatar";
 import { create } from "zustand";
 import { ulid } from "ulidx";
 import ErrorBoundary from "./ErrorBoundary";
+import { ErrorDisplay } from "./ErrorDisplay";
 
 interface ArchivedChat {
   id: string;
@@ -296,6 +297,37 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   const [input, setInput] = useState("");
   const [streamBuffer, setStreamBuffer] = useState("");
   const messageListRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<{
+    message: string;
+    details?: string;
+  } | null>(null);
+  const [lastAttemptedMessage, setLastAttemptedMessage] = useState<string>("");
+  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(
+    null
+  );
+
+  // Load chat history on mount
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      try {
+        const history = await invoke<Message[]>("get_chat_history");
+        // Add missing properties to each message
+        const formattedHistory = history.map((msg) => ({
+          ...msg,
+          id: ulid(),
+          timestamp: new Date().toLocaleTimeString(),
+          reactions: { thumbsUp: 0 },
+        }));
+        setMessages(formattedHistory);
+      } catch (error) {
+        console.error("Error loading chat history:", error);
+      }
+    };
+
+    if (!selectedArchivedChat) {
+      loadChatHistory();
+    }
+  }, [setMessages, selectedArchivedChat]);
 
   // Effect to handle archived chat selection
   useEffect(() => {
@@ -328,29 +360,37 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
     }
   }, [streamBuffer, isStreaming, updateLastMessage]);
 
-  const handleSend = async () => {
-    if (input && !isStreaming) {
+  const processMessage = async (
+    messageText: string,
+    existingMessageId?: string
+  ) => {
+    try {
+      setError(null);
       // Get current config to check if streaming is enabled before doing anything else
       const config = await invoke<any>("get_config");
       const streamingEnabled =
         config.providers[config.active_provider].streaming;
       console.log("DEBUG: Streaming enabled:", streamingEnabled);
 
-      const newMessage: Message = {
-        id: ulid(),
-        content: input,
-        role: "user",
-        timestamp: new Date().toLocaleTimeString(),
-        reactions: { thumbsUp: 0 },
-      };
-      addMessage(newMessage);
-      setInput("");
-
-      try {
-        // Only set streaming state if it's enabled in settings
-        if (streamingEnabled) {
-          setStreamBuffer("");
-          setIsStreaming(true);
+      // Only set streaming state if it's enabled in settings
+      if (streamingEnabled) {
+        setStreamBuffer("");
+        setIsStreaming(true);
+        if (existingMessageId) {
+          // Update existing message for retry
+          const messageIndex = messages.findIndex(
+            (msg) => msg.id === existingMessageId
+          );
+          if (messageIndex !== -1) {
+            const updatedMessages = [...messages];
+            updatedMessages[messageIndex] = {
+              ...updatedMessages[messageIndex],
+              content: "",
+            };
+            setMessages(updatedMessages);
+          }
+        } else {
+          // Add new message for first attempt
           addMessage({
             id: ulid(),
             content: "",
@@ -359,15 +399,31 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
             reactions: { thumbsUp: 0 },
           });
         }
+      }
 
-        const response = await invoke<{ reply: string }>("process_message", {
-          message: input,
-        });
-        console.log("DEBUG: Response received:", response);
+      const response = await invoke<{ reply: string }>("process_message", {
+        message: messageText,
+      });
+      console.log("DEBUG: Response received:", response);
 
-        // Handle non-streaming response - only add message if streaming is disabled
-        if (!streamingEnabled && response && response.reply) {
-          console.log("DEBUG: Adding non-streaming response");
+      // Handle non-streaming response - only add/update message if streaming is disabled
+      if (!streamingEnabled && response && response.reply) {
+        console.log("DEBUG: Adding non-streaming response");
+        if (existingMessageId) {
+          // Update existing message for retry
+          const messageIndex = messages.findIndex(
+            (msg) => msg.id === existingMessageId
+          );
+          if (messageIndex !== -1) {
+            const updatedMessages = [...messages];
+            updatedMessages[messageIndex] = {
+              ...updatedMessages[messageIndex],
+              content: response.reply,
+            };
+            setMessages(updatedMessages);
+          }
+        } else {
+          // Add new message for first attempt
           addMessage({
             id: ulid(),
             content: response.reply,
@@ -376,18 +432,51 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
             reactions: { thumbsUp: 0 },
           });
         }
-      } catch (error) {
-        console.error("Error in process_message:", error);
-        addMessage({
-          id: ulid(),
-          content:
-            "An error occurred while processing your message. Please try again.",
-          role: "assistant",
-          timestamp: new Date().toLocaleTimeString(),
-          reactions: { thumbsUp: 0 },
-        });
-      } finally {
-        setIsStreaming(false);
+      }
+    } catch (error: any) {
+      console.error("Error in process_message:", error);
+      const errorDetails = error?.details || null;
+      setError({
+        message:
+          error?.message || "An error occurred while processing your message.",
+        details: errorDetails,
+      });
+    } finally {
+      setIsStreaming(false);
+      setRetryingMessageId(null);
+    }
+  };
+
+  const handleSend = async () => {
+    if (input && !isStreaming) {
+      const newMessage: Message = {
+        id: ulid(),
+        content: input,
+        role: "user",
+        timestamp: new Date().toLocaleTimeString(),
+        reactions: { thumbsUp: 0 },
+      };
+      addMessage(newMessage);
+      setLastAttemptedMessage(input);
+      setInput("");
+      await processMessage(input);
+    }
+  };
+
+  const handleRetry = async () => {
+    if (lastAttemptedMessage) {
+      // Find the last assistant message to update
+      const lastAssistantIndex = [...messages]
+        .reverse()
+        .findIndex((msg) => msg.role === "assistant");
+      if (lastAssistantIndex !== -1) {
+        const messageIndex = messages.length - 1 - lastAssistantIndex;
+        const messageId = messages[messageIndex].id;
+        setRetryingMessageId(messageId);
+        await processMessage(lastAttemptedMessage, messageId);
+      } else {
+        // If no assistant message found, proceed as normal
+        await processMessage(lastAttemptedMessage);
       }
     }
   };
@@ -433,6 +522,13 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
                 />
               </React.Fragment>
             ))}
+            {error && (
+              <ErrorDisplay
+                message={error.message}
+                details={error.details}
+                onRetry={handleRetry}
+              />
+            )}
           </div>
         </div>
 

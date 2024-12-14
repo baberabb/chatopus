@@ -4,8 +4,17 @@ use std::fmt::Debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
+    pub id: String,
     pub role: String,
     pub content: String,
+    pub timestamp: String,
+    #[serde(default)]
+    pub reactions: Option<MessageReactions>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageReactions {
+    pub thumbs_up: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
