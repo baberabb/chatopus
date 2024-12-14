@@ -30,6 +30,7 @@ import { ChatContainer } from "./ChatContainer";
 import { SidebarNavigation } from "./SidebarNavigation";
 import { TrashContent } from "./TrashContent";
 import Settings from "./Settings";
+import { ModelSettings } from "./ModelSettings";
 import { ThemeToggle } from "./ThemeToggle";
 import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
 import { useZustandTheme } from "../store";
@@ -88,7 +89,7 @@ const data = {
 
 export default function Page() {
   const [activeContent, setActiveContent] = React.useState<
-    "inbox" | "trash" | "settings"
+    "inbox" | "trash" | "settings" | "model"
   >("inbox");
   const [selectedChat, setSelectedChat] = React.useState<ArchivedChat>();
   const { theme } = useZustandTheme();
@@ -113,6 +114,16 @@ export default function Page() {
           <ChatContainer selectedArchivedChat={selectedChat} />
         ) : activeContent === "trash" ? (
           <TrashContent />
+        ) : activeContent === "model" ? (
+          <div className="p-6 max-w-2xl mx-auto">
+            <h2
+              className="text-2xl font-bold mb-6"
+              style={{ color: theme.text }}
+            >
+              Model Settings
+            </h2>
+            <ModelSettings />
+          </div>
         ) : (
           <Settings />
         )}
@@ -122,7 +133,7 @@ export default function Page() {
 }
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  setActiveContent: (content: "inbox" | "trash" | "settings") => void;
+  setActiveContent: (content: "inbox" | "trash" | "settings" | "model") => void;
   setSelectedChat: (chat: ArchivedChat | undefined) => void;
 }
 

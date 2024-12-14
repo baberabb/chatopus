@@ -17,23 +17,11 @@ import remarkMath from "remark-math";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import { darcula } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import "highlight.js/styles/atom-one-dark.css";
-import { useZustandTheme } from "../store";
+import { useZustandTheme, useChatStore, Message } from "../store";
 import Avatar from "@mui/material/Avatar";
 import { create } from "zustand";
 import { ulid } from "ulidx";
 import ErrorBoundary from "./ErrorBoundary";
-
-interface Reaction {
-  thumbsUp: number;
-}
-
-interface Message {
-  id: string;
-  content: string;
-  role: string;
-  timestamp: string;
-  reactions?: Reaction;
-}
 
 interface ArchivedChat {
   id: string;
@@ -303,7 +291,8 @@ const MessageBlock: React.FC<{
 export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   const { theme } = useZustandTheme();
   const { isStreaming, setIsStreaming } = useStreamingStore();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { messages, addMessage, updateLastMessage, setMessages } =
+    useChatStore();
   const [input, setInput] = useState("");
   const [streamBuffer, setStreamBuffer] = useState("");
   const messageListRef = useRef<HTMLDivElement>(null);
@@ -320,7 +309,7 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
       };
       setMessages([archivedMessage]);
     }
-  }, [selectedArchivedChat]);
+  }, [selectedArchivedChat, setMessages]);
 
   useEffect(() => {
     const unlisten = listen("stream-response", (event) => {
@@ -335,24 +324,9 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
 
   useEffect(() => {
     if (isStreaming && streamBuffer) {
-      setMessages((prevMessages) => {
-        const newMessages = [...prevMessages];
-        const lastMessage = newMessages[newMessages.length - 1];
-        if (lastMessage.role === "assistant") {
-          lastMessage.content = streamBuffer;
-        } else {
-          newMessages.push({
-            id: ulid(),
-            content: streamBuffer,
-            role: "assistant",
-            timestamp: new Date().toLocaleTimeString(),
-            reactions: { thumbsUp: 0 },
-          });
-        }
-        return newMessages;
-      });
+      updateLastMessage(streamBuffer);
     }
-  }, [streamBuffer, isStreaming]);
+  }, [streamBuffer, isStreaming, updateLastMessage]);
 
   const handleSend = async () => {
     if (input && !isStreaming) {
@@ -369,7 +343,7 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
         timestamp: new Date().toLocaleTimeString(),
         reactions: { thumbsUp: 0 },
       };
-      setMessages((prevMessages) => [...prevMessages, newMessage]);
+      addMessage(newMessage);
       setInput("");
 
       try {
@@ -377,6 +351,13 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
         if (streamingEnabled) {
           setStreamBuffer("");
           setIsStreaming(true);
+          addMessage({
+            id: ulid(),
+            content: "",
+            role: "assistant",
+            timestamp: new Date().toLocaleTimeString(),
+            reactions: { thumbsUp: 0 },
+          });
         }
 
         const response = await invoke<{ reply: string }>("process_message", {
@@ -387,30 +368,24 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
         // Handle non-streaming response - only add message if streaming is disabled
         if (!streamingEnabled && response && response.reply) {
           console.log("DEBUG: Adding non-streaming response");
-          setMessages((prevMessages) => [
-            ...prevMessages,
-            {
-              id: ulid(),
-              content: response.reply,
-              role: "assistant",
-              timestamp: new Date().toLocaleTimeString(),
-              reactions: { thumbsUp: 0 },
-            },
-          ]);
-        }
-      } catch (error) {
-        console.error("Error in process_message:", error);
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          {
+          addMessage({
             id: ulid(),
-            content:
-              "An error occurred while processing your message. Please try again.",
+            content: response.reply,
             role: "assistant",
             timestamp: new Date().toLocaleTimeString(),
             reactions: { thumbsUp: 0 },
-          },
-        ]);
+          });
+        }
+      } catch (error) {
+        console.error("Error in process_message:", error);
+        addMessage({
+          id: ulid(),
+          content:
+            "An error occurred while processing your message. Please try again.",
+          role: "assistant",
+          timestamp: new Date().toLocaleTimeString(),
+          reactions: { thumbsUp: 0 },
+        });
       } finally {
         setIsStreaming(false);
       }
@@ -418,8 +393,8 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   };
 
   const handleReact = (messageId: string) => {
-    setMessages((prevMessages) =>
-      prevMessages.map((msg) =>
+    setMessages(
+      messages.map((msg) =>
         msg.id === messageId
           ? {
               ...msg,

@@ -1,66 +1,50 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Card } from "./ui/card";
-import { Label } from "./ui/label";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
-import { Switch } from "./ui/switch";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "./ui/select";
+} from "@/components/ui/select";
+import { useModelStore } from "@/store";
 
-interface ProviderSettings {
-  api_key: string;
-  model: string;
-  max_tokens: number;
-  streaming: boolean;
-}
-
-interface AppConfig {
-  active_provider: string;
-  providers: {
-    [key: string]: ProviderSettings;
-  };
-}
+const modelOptions = {
+  anthropic: [
+    "claude-3-opus-20240229",
+    "claude-3-sonnet-20240229",
+    "claude-3-haiku-20240307",
+    "claude-2.1",
+    "claude-2.0",
+  ],
+  openai: [
+    "gpt-4-turbo-preview",
+    "gpt-4-0125-preview",
+    "gpt-4",
+    "gpt-3.5-turbo",
+  ],
+  openrouter: [
+    "anthropic/claude-3-opus",
+    "anthropic/claude-3-sonnet",
+    "openai/gpt-4-turbo-preview",
+    "google/gemini-pro",
+    "meta/llama-3-70b",
+  ],
+};
 
 export function ModelSettings() {
-  const [config, setConfig] = useState<AppConfig>({
-    active_provider: "anthropic",
-    providers: {
-      anthropic: {
-        api_key: "",
-        model: "claude-3-5-sonnet-20240620",
-        max_tokens: 1024,
-        streaming: true,
-      },
-    },
-  });
-
-  useEffect(() => {
-    // Load initial config
-    loadConfig();
-  }, []);
-
-  const loadConfig = async () => {
-    try {
-      const savedConfig = await invoke<AppConfig>("get_config");
-      setConfig(savedConfig);
-    } catch (error) {
-      console.error("Failed to load config:", error);
-    }
-  };
+  const { config, updateProviderSettings, setActiveProvider } = useModelStore();
 
   const handleProviderChange = async (provider: string) => {
     try {
       await invoke("set_active_provider", { provider });
-      setConfig((prev) => ({
-        ...prev,
-        active_provider: provider,
-      }));
+      setActiveProvider(provider);
     } catch (error) {
       console.error("Failed to update active provider:", error);
     }
@@ -68,19 +52,15 @@ export function ModelSettings() {
 
   const handleSettingChange = (
     provider: string,
-    setting: keyof ProviderSettings,
+    setting: string,
     value: string | number | boolean
   ) => {
-    setConfig((prev) => ({
-      ...prev,
-      providers: {
-        ...prev.providers,
-        [provider]: {
-          ...prev.providers[provider],
-          [setting]: value,
-        },
-      },
-    }));
+    const currentSettings = config.providers[provider];
+    const newSettings = {
+      ...currentSettings,
+      [setting]: value,
+    };
+    updateProviderSettings(provider, newSettings);
   };
 
   const saveProviderSettings = async (provider: string) => {
@@ -92,94 +72,125 @@ export function ModelSettings() {
     }
   };
 
+  const renderProviderSettings = (provider: string) => {
+    const settings = config.providers[provider];
+    const models = modelOptions[provider as keyof typeof modelOptions] || [];
+
+    return (
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>API Key</Label>
+            <Input
+              type="password"
+              value={settings.api_key}
+              onChange={(e) =>
+                handleSettingChange(provider, "api_key", e.target.value)
+              }
+              placeholder={`Enter your ${provider} API key`}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Model</Label>
+            <Select
+              value={settings.model}
+              onValueChange={(value) =>
+                handleSettingChange(provider, "model", value)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                {models.map((model) => (
+                  <SelectItem key={model} value={model}>
+                    {model}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Max Tokens</Label>
+            <Input
+              type="number"
+              value={settings.max_tokens}
+              onChange={(e) =>
+                handleSettingChange(
+                  provider,
+                  "max_tokens",
+                  parseInt(e.target.value)
+                )
+              }
+            />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id={`${provider}-streaming`}
+              checked={settings.streaming}
+              onCheckedChange={(checked) =>
+                handleSettingChange(provider, "streaming", checked)
+              }
+            />
+            <Label htmlFor={`${provider}-streaming`}>Enable Streaming</Label>
+          </div>
+
+          <Button
+            onClick={() => saveProviderSettings(provider)}
+            className="w-full mt-4"
+          >
+            Save Settings
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card className="p-6">
       <div className="space-y-6">
-        <div>
-          <Label>Active Provider</Label>
-          <Select
-            value={config.active_provider}
-            onValueChange={handleProviderChange}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select provider" />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.keys(config.providers).map((provider) => (
-                <SelectItem key={provider} value={provider}>
-                  {provider.charAt(0).toUpperCase() + provider.slice(1)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <h2 className="text-2xl font-bold">Model Settings</h2>
 
-        {Object.entries(config.providers).map(([provider, settings]) => (
-          <div
-            key={provider}
-            className={`space-y-4 ${
-              provider === config.active_provider ? "" : "opacity-50"
-            }`}
-          >
-            <h3 className="text-lg font-semibold capitalize">
-              {provider} Settings
-            </h3>
-
-            <div className="space-y-2">
-              <Label>API Key</Label>
-              <Input
-                type="password"
-                value={settings.api_key}
-                onChange={(e) =>
-                  handleSettingChange(provider, "api_key", e.target.value)
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Model</Label>
-              <Input
-                value={settings.model}
-                onChange={(e) =>
-                  handleSettingChange(provider, "model", e.target.value)
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Max Tokens</Label>
-              <Input
-                type="number"
-                value={settings.max_tokens}
-                onChange={(e) =>
-                  handleSettingChange(
-                    provider,
-                    "max_tokens",
-                    parseInt(e.target.value)
-                  )
-                }
-              />
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Switch
-                id={`${provider}-streaming`}
-                checked={settings.streaming}
-                onCheckedChange={(checked) =>
-                  handleSettingChange(provider, "streaming", checked)
-                }
-              />
-              <Label htmlFor={`${provider}-streaming`}>Enable Streaming</Label>
-            </div>
-
-            <Button
-              onClick={() => saveProviderSettings(provider)}
-              disabled={provider !== config.active_provider}
+        <Tabs defaultValue={config.active_provider} className="w-full">
+          <TabsList className="w-full justify-start">
+            <TabsTrigger
+              value="anthropic"
+              onClick={() => handleProviderChange("anthropic")}
+              className="flex-1"
             >
-              Save {provider} Settings
-            </Button>
-          </div>
-        ))}
+              Anthropic
+            </TabsTrigger>
+            <TabsTrigger
+              value="openai"
+              onClick={() => handleProviderChange("openai")}
+              className="flex-1"
+            >
+              OpenAI
+            </TabsTrigger>
+            <TabsTrigger
+              value="openrouter"
+              onClick={() => handleProviderChange("openrouter")}
+              className="flex-1"
+            >
+              OpenRouter
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="anthropic" className="mt-6">
+            {renderProviderSettings("anthropic")}
+          </TabsContent>
+
+          <TabsContent value="openai" className="mt-6">
+            {renderProviderSettings("openai")}
+          </TabsContent>
+
+          <TabsContent value="openrouter" className="mt-6">
+            {renderProviderSettings("openrouter")}
+          </TabsContent>
+        </Tabs>
       </div>
     </Card>
   );

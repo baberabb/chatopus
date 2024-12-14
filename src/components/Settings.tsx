@@ -2,7 +2,6 @@ import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import { Slider } from "./ui/slider";
 import { useZustandTheme } from "../store";
-import { ModelSettings } from "./ModelSettings";
 import { Separator } from "./ui/separator";
 
 const Settings = () => {
@@ -49,13 +48,6 @@ const Settings = () => {
               defaultValue={[50]}
             />
           </div>
-        </div>
-
-        <Separator className="my-6" />
-
-        <div className="space-y-6">
-          <h3 className="text-xl font-semibold">AI Models</h3>
-          <ModelSettings />
         </div>
       </div>
     </div>

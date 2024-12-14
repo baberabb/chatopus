@@ -1,5 +1,13 @@
 import React from "react";
-import { ArchiveX, File, Inbox, Send, Settings, Trash2 } from "lucide-react";
+import {
+  ArchiveX,
+  File,
+  Inbox,
+  Send,
+  Settings,
+  Trash2,
+  Cpu,
+} from "lucide-react";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -45,6 +53,13 @@ const navItems = [
     content: "trash",
   },
   {
+    title: "Model",
+    url: "#",
+    icon: Cpu,
+    isActive: false,
+    content: "model",
+  },
+  {
     title: "Settings",
     url: "#",
     icon: Settings,
@@ -54,7 +69,7 @@ const navItems = [
 ];
 
 interface SidebarNavigationProps {
-  setActiveContent: (content: "inbox" | "trash" | "settings") => void;
+  setActiveContent: (content: "inbox" | "trash" | "settings" | "model") => void;
   setOpen: (open: boolean) => void;
 }
 
@@ -79,7 +94,7 @@ export function SidebarNavigation({
                   setActiveItem(item);
                   setOpen(true);
                   setActiveContent(
-                    item.content as "inbox" | "trash" | "settings"
+                    item.content as "inbox" | "trash" | "settings" | "model"
                   );
                 }}
                 isActive={activeItem.title === item.title}

@@ -17,6 +17,45 @@ interface Theme {
   shadowColor: string;
 }
 
+export interface Message {
+  id: string;
+  content: string;
+  role: string;
+  timestamp: string;
+  reactions?: {
+    thumbsUp: number;
+  };
+}
+
+interface ChatStore {
+  messages: Message[];
+  setMessages: (messages: Message[]) => void;
+  addMessage: (message: Message) => void;
+  updateLastMessage: (content: string) => void;
+  clearMessages: () => void;
+}
+
+interface ProviderSettings {
+  api_key: string;
+  model: string;
+  max_tokens: number;
+  streaming: boolean;
+}
+
+interface ModelConfig {
+  active_provider: string;
+  providers: {
+    [key: string]: ProviderSettings;
+  };
+}
+
+interface ModelStore {
+  config: ModelConfig;
+  setConfig: (config: ModelConfig) => void;
+  updateProviderSettings: (provider: string, settings: ProviderSettings) => void;
+  setActiveProvider: (provider: string) => void;
+}
+
 export const themes: Record<ThemeType, Theme> = {
   light: {
     background: "#FFFFFF",
@@ -37,6 +76,7 @@ export const themes: Record<ThemeType, Theme> = {
 };
 
 const THEME_STORAGE_KEY = "theme";
+const MODEL_CONFIG_STORAGE_KEY = "model_config";
 
 const getInitialTheme = (): ThemeType => {
   const savedTheme = localStorage.getItem(
@@ -48,6 +88,36 @@ const getInitialTheme = (): ThemeType => {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
+};
+
+const getInitialModelConfig = (): ModelConfig => {
+  const savedConfig = localStorage.getItem(MODEL_CONFIG_STORAGE_KEY);
+  if (savedConfig) {
+    return JSON.parse(savedConfig);
+  }
+  return {
+    active_provider: "anthropic",
+    providers: {
+      anthropic: {
+        api_key: "",
+        model: "claude-3-sonnet-20240320",
+        max_tokens: 1024,
+        streaming: true,
+      },
+      openai: {
+        api_key: "",
+        model: "gpt-4-turbo-preview",
+        max_tokens: 1024,
+        streaming: true,
+      },
+      openrouter: {
+        api_key: "",
+        model: "anthropic/claude-3-opus",
+        max_tokens: 1024,
+        streaming: true,
+      },
+    },
+  };
 };
 
 const applyTheme = (themeType: ThemeType, theme: Theme) => {
@@ -76,6 +146,58 @@ const useThemeStore = create<ThemeStore>((set) => {
         localStorage.setItem(THEME_STORAGE_KEY, newThemeType);
 
         return { themeType: newThemeType, theme: newTheme };
+      }),
+  };
+});
+
+export const useChatStore = create<ChatStore>((set) => ({
+  messages: [],
+  setMessages: (messages) => set({ messages }),
+  addMessage: (message) => set((state) => ({ 
+    messages: [...state.messages, message] 
+  })),
+  updateLastMessage: (content) => set((state) => {
+    const messages = [...state.messages];
+    if (messages.length > 0) {
+      messages[messages.length - 1] = {
+        ...messages[messages.length - 1],
+        content
+      };
+    }
+    return { messages };
+  }),
+  clearMessages: () => set({ messages: [] })
+}));
+
+export const useModelStore = create<ModelStore>((set) => {
+  const initialConfig = getInitialModelConfig();
+
+  return {
+    config: initialConfig,
+    setConfig: (config) => {
+      localStorage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(config));
+      set({ config });
+    },
+    updateProviderSettings: (provider, settings) =>
+      set((state) => {
+        const newConfig = {
+          ...state.config,
+          providers: {
+            ...state.config.providers,
+            [provider]: settings,
+          },
+        };
+        localStorage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
+        return { config: newConfig };
+      }),
+    setActiveProvider: (provider) =>
+      set((state) => {
+        const newConfig = {
+          ...state.config,
+          active_provider: provider,
+        };
+        localStorage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
+        return { config: newConfig };
       }),
   };
 });
