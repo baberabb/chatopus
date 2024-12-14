@@ -1,9 +1,10 @@
 import * as React from "react";
 import { createRoot } from "react-dom/client";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "./components/ui/tooltip";
 import "./globals.css";
-import { useZustandTheme } from "@/store";
-import SidebarLayout from "@/components/sidebar-09";
+import { useZustandTheme } from "./store";
+import SidebarLayout from "./components/sidebar-09";
+import { ModelProvider } from "./contexts/ModelContext";
 
 const App = () => {
   const { theme } = useZustandTheme();
@@ -22,7 +23,9 @@ if (!rootElement) throw new Error("Root element not found");
 createRoot(rootElement).render(
   <React.StrictMode>
     <TooltipProvider>
-      <App />
+      <ModelProvider>
+        <App />
+      </ModelProvider>
     </TooltipProvider>
   </React.StrictMode>
 );

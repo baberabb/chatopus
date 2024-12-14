@@ -1,3 +1,43 @@
+/**
+ * ChatContainer.tsx
+ *
+ * A comprehensive chat interface component that manages message display, user interactions,
+ * and real-time message streaming. This component serves as the main container for the chat
+ * functionality in the application.
+ *
+ * Key Features:
+ * - Real-time message streaming with visual feedback
+ * - Support for markdown rendering with code syntax highlighting
+ * - Message reactions (thumbs up) and copy functionality
+ * - Error handling with retry capability
+ * - Theme-aware styling using Zustand store
+ * - Code execution capability for code blocks
+ * - Chat history persistence
+ *
+ * Component Structure:
+ * - ChatContainer (main component)
+ *   ├─ MessageBlock (individual message wrapper)
+ *   │  ├─ UserAvatar (displays user/assistant avatar)
+ *   │  └─ MessageContent (renders message with markdown)
+ *   │     └─ CodeBlock (handles code syntax highlighting)
+ *   └─ Input area (message input with attachments)
+ *
+ * State Management:
+ * - Uses Zustand for theme and chat message state
+ * - Maintains streaming state for real-time updates
+ * - Handles message retry and error states
+ *
+ * Props:
+ * @prop {ArchivedChat} selectedArchivedChat - Optional archived chat to display
+ *
+ * Key Interactions:
+ * - Message sending/receiving
+ * - Message reactions
+ * - Code block copying and execution
+ * - Error handling and message retry
+ * - Real-time message streaming
+ */
+
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -23,7 +63,11 @@ import { create } from "zustand";
 import { ulid } from "ulidx";
 import ErrorBoundary from "./ErrorBoundary";
 import { ErrorDisplay } from "./ErrorDisplay";
+import { useModel } from "../contexts/ModelContext";
 
+/**
+ * Interface representing an archived chat entry
+ */
 interface ArchivedChat {
   id: string;
   title: string;
@@ -37,7 +81,9 @@ interface ChatContainerProps {
   selectedArchivedChat?: ArchivedChat;
 }
 
-// Avatar helper functions
+/**
+ * Helper function to generate consistent colors for avatars based on string input
+ */
 function stringToColor(string: string) {
   let hash = 0;
   for (let i = 0; i < string.length; i++) {
@@ -51,6 +97,9 @@ function stringToColor(string: string) {
   return color;
 }
 
+/**
+ * Helper function to generate avatar properties based on user name
+ */
 function stringAvatar(name: string | undefined) {
   if (!name) {
     return {
@@ -69,7 +118,9 @@ function stringAvatar(name: string | undefined) {
   };
 }
 
-// Store for managing streaming state
+/**
+ * Zustand store interface for managing streaming state
+ */
 interface StreamingState {
   isStreaming: boolean;
   setIsStreaming: (isStreaming: boolean) => void;
@@ -80,7 +131,10 @@ const useStreamingStore = create<StreamingState>((set) => ({
   setIsStreaming: (isStreaming) => set({ isStreaming }),
 }));
 
-// Components
+/**
+ * UserAvatar Component
+ * Renders an avatar for a user with either an image or generated initials
+ */
 const UserAvatar: React.FC<{ user: string; imageUrl?: string }> = ({
   user,
   imageUrl,
@@ -94,6 +148,10 @@ const UserAvatar: React.FC<{ user: string; imageUrl?: string }> = ({
   );
 };
 
+/**
+ * CopyButton Component
+ * Provides copy functionality with visual feedback
+ */
 const CopyButton = ({ text }: { text: string }) => {
   const { theme } = useZustandTheme();
   const [isCopied, setIsCopied] = useState(false);
@@ -119,6 +177,10 @@ const CopyButton = ({ text }: { text: string }) => {
   );
 };
 
+/**
+ * CodeBlock Component
+ * Renders code with syntax highlighting and provides execution capability
+ */
 const CodeBlock: React.FC<{ language: string; value: string }> = ({
   language,
   value,
@@ -171,6 +233,10 @@ const CodeBlock: React.FC<{ language: string; value: string }> = ({
   );
 };
 
+/**
+ * MessageContent Component
+ * Renders the content of a message with markdown support
+ */
 const MessageContent: React.FC<{ message: Message; isStreaming: boolean }> = ({
   message,
   isStreaming,
@@ -239,6 +305,10 @@ const MessageContent: React.FC<{ message: Message; isStreaming: boolean }> = ({
   );
 };
 
+/**
+ * MessageBlock Component
+ * Renders a complete message block with avatar, content, and interaction buttons
+ */
 const MessageBlock: React.FC<{
   message: Message;
   onReact: (messageId: string) => void;
@@ -289,8 +359,13 @@ const MessageBlock: React.FC<{
   );
 };
 
+/**
+ * ChatContainer Component
+ * Main component that orchestrates the entire chat interface
+ */
 export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   const { theme } = useZustandTheme();
+  const { currentModel } = useModel();
   const { isStreaming, setIsStreaming } = useStreamingStore();
   const { messages, addMessage, updateLastMessage, setMessages } =
     useChatStore();
@@ -503,8 +578,21 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
         className="relative h-full"
         style={{ backgroundColor: theme.background, color: theme.text }}
       >
-        {/* Message list with bottom padding to prevent content being hidden behind input */}
-        <div className="absolute inset-0 bottom-[76px] overflow-hidden">
+        {/* Model header */}
+        <div
+          className="absolute top-0 left-0 right-0 h-10 flex items-center px-4 bg-opacity-80 backdrop-blur-sm z-10"
+          style={{
+            backgroundColor: theme.surface,
+            borderBottom: `1px solid ${theme.border}`,
+          }}
+        >
+          <span className="text-sm font-medium" style={{ color: theme.text }}>
+            {currentModel?.name || "No model selected"}
+          </span>
+        </div>
+
+        {/* Message list with top and bottom padding to prevent content being hidden */}
+        <div className="absolute inset-0 top-10 bottom-[76px] overflow-hidden">
           <div
             className="h-full overflow-y-auto py-4 px-4"
             style={{ backgroundColor: theme.background }}
