@@ -22,6 +22,7 @@ export interface Message {
   content: string;
   role: string;
   timestamp: string;
+  model?: string;  // Added model field
   reactions?: {
     thumbsUp: number;
   };

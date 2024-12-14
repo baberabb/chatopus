@@ -57,7 +57,12 @@ import remarkMath from "remark-math";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import { darcula } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import "highlight.js/styles/atom-one-dark.css";
-import { useZustandTheme, useChatStore, Message } from "../store";
+import {
+  useZustandTheme,
+  useChatStore,
+  Message,
+  useModelStore,
+} from "../store";
 import Avatar from "@mui/material/Avatar";
 import { create } from "zustand";
 import { ulid } from "ulidx";
@@ -250,7 +255,7 @@ const MessageContent: React.FC<{ message: Message; isStreaming: boolean }> = ({
           className="text-sm font-medium mr-2"
           style={{ color: theme.text }}
         >
-          {message.role}
+          {message.role === "user" ? "You" : message.model || "Assistant"}
         </span>
         <span className="text-xs" style={{ color: theme.textSecondary }}>
           {message.timestamp}
@@ -366,6 +371,7 @@ const MessageBlock: React.FC<{
 export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   const { theme } = useZustandTheme();
   const { currentModel } = useModel();
+  const { config } = useModelStore();
   const { isStreaming, setIsStreaming } = useStreamingStore();
   const { messages, addMessage, updateLastMessage, setMessages } =
     useChatStore();
@@ -445,7 +451,7 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
       const config = await invoke<any>("get_config");
       const streamingEnabled =
         config.providers[config.active_provider].streaming;
-      console.log("DEBUG: Streaming enabled:", streamingEnabled);
+      const currentModelName = config.providers[config.active_provider].model;
 
       // Only set streaming state if it's enabled in settings
       if (streamingEnabled) {
@@ -470,6 +476,7 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
             id: ulid(),
             content: "",
             role: "assistant",
+            model: currentModelName,
             timestamp: new Date().toLocaleTimeString(),
             reactions: { thumbsUp: 0 },
           });
@@ -503,6 +510,7 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
             id: ulid(),
             content: response.reply,
             role: "assistant",
+            model: currentModelName,
             timestamp: new Date().toLocaleTimeString(),
             reactions: { thumbsUp: 0 },
           });
