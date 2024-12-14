@@ -8,6 +8,7 @@ use std::sync::Arc;
 use tauri_plugin_localhost;
 use tauri_plugin_log::{Target, TargetKind};
 use tauri_plugin_sql;
+use tauri_plugin_store::StoreBuilder;
 
 mod apimodels;
 mod chat;
@@ -32,6 +33,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_sql::Builder::default().build())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .manage(ChatHistory(Arc::new(parking_lot::Mutex::new(Vec::new()))))
         .manage(ConfigState(parking_lot::Mutex::new(AppConfig::default())))
         .invoke_handler(tauri::generate_handler![
