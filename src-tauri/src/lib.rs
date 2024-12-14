@@ -1,57 +1,50 @@
-use crate::chat::{clear_chat_history, get_chat_history, process_message, ChatHistory};
-use crate::config::{
-    get_config, set_active_provider, update_config, update_provider_settings, AppConfig,
-    ConfigState,
-};
 use parking_lot;
-use std::sync::Arc;
 use sqlx::sqlite::SqlitePoolOptions;
-use tauri_plugin_localhost;
-use tauri_plugin_log::{Target, TargetKind};
-use tauri_plugin_store::StoreBuilder;
-use std::fs::OpenOptions;
-use tauri::{AppHandle, Manager};
 use sqlx::Pool;
 use sqlx::Sqlite;
+use std::error::Error as StdError;
+use std::sync::Arc;
+use tauri::Manager;
 
 type Db = Pool<Sqlite>;
-
 
 mod apimodels;
 mod chat;
 mod config;
 mod daemon;
-mod migrations;
 mod routes;
 
+async fn setup_db(data_dir: &std::path::Path) -> Result<Db, Box<dyn StdError>> {
+    // Ensure data directory exists
+    std::fs::create_dir_all(data_dir)?;
 
-async fn setup_db(app: &AppHandle) -> Db {
-    let mut path = app
-        .path()
-        .app_data_dir()
-        .expect("could not get data_dir");
-    match std::fs::create_dir_all(path.clone()) {
-        Ok(_) => {}
-        Err(err) => {
-            panic!("error creating directory {}", err);
+    // Setup database path
+    let db_path = data_dir.join("db.sqlite");
+    let db_url = format!("sqlite:{}", db_path.to_str().unwrap());
+
+    // Create connection pool
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&db_url)
+        .await?;
+
+    // Run migrations
+    match sqlx::migrate!("./migrations").run(&pool).await {
+        Ok(_) => {
+            println!("Migrations executed successfully");
         }
-    };
-    path.push("db.sqlite");
-    let result = OpenOptions::new().create_new(true).write(true).open(&path);
-    match result {
-        Ok(_) => println!("database file created"),
-        Err(err) => match err.kind() {
-            std::io::ErrorKind::AlreadyExists => println!("database file already exists"),
-            _ => {
-                panic!("error creating databse file {}", err);
+        Err(e) => {
+            if !e
+                .to_string()
+                .contains("was previously applied but has been modified")
+            {
+                return Err(Box::new(e));
             }
-        },
+            println!("Ignoring modified migration error");
+        }
     }
-    let db = SqlitePoolOptions::new()
-        .connect(path.to_str().unwrap())
-        .await
-        .unwrap();
-    db
+
+    Ok(pool)
 }
 
 struct AppState {
@@ -60,32 +53,51 @@ struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let port: u16 = 9527;
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
-                    Target::new(TargetKind::Stdout),
-                    Target::new(TargetKind::LogDir { file_name: None }),
-                    Target::new(TargetKind::Webview),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
+                        file_name: None,
+                    }),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
                 ])
                 .build(),
         )
         .plugin(tauri_plugin_store::Builder::default().build())
-        .manage(ChatHistory(Arc::new(parking_lot::Mutex::new(Vec::new()))))
-        .manage(ConfigState(parking_lot::Mutex::new(AppConfig::default())))
-        .manage(AppState { db })
         .invoke_handler(tauri::generate_handler![
-            process_message,
-            get_chat_history,
-            clear_chat_history,
-            get_config,
-            update_config,
-            update_provider_settings,
-            set_active_provider,
+            chat::process_message,
+            chat::get_chat_history,
+            chat::clear_chat_history,
+            config::get_config,
+            config::update_config,
+            config::update_provider_settings,
+            config::set_active_provider,
         ])
+        .setup(|app| {
+            // Get data directory using app directly
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to get app data dir");
+
+            // Initialize database
+            let runtime = tokio::runtime::Runtime::new()?;
+            let db = runtime.block_on(setup_db(&data_dir))?;
+
+            // Setup app state using app directly
+            app.manage(chat::ChatHistory(Arc::new(parking_lot::Mutex::new(
+                Vec::new(),
+            ))));
+            app.manage(config::ConfigState(parking_lot::Mutex::new(
+                config::AppConfig::default(),
+            )));
+            app.manage(AppState { db });
+
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
