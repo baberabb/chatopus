@@ -14,6 +14,8 @@ mod chat;
 mod config;
 mod daemon;
 mod routes;
+mod jupyter;
+
 
 async fn setup_db(data_dir: &std::path::Path) -> Result<Db, Box<dyn StdError>> {
     // Ensure data directory exists

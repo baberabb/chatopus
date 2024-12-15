@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Message } from "../../store";
-import { useChatStore, useModelStore } from "../../store";
+import { Message } from "@/store.ts";
+import { useChatStore, useModelStore } from "@/store.ts";
 
 export function useChat() {
   // TODO: fix
