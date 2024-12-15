@@ -1,5 +1,4 @@
-mod migrate;
+// ..depreciated
+// mod migrate;
 
-use tauri_plugin_sql::{Migration, MigrationKind};
-
-
+// use tauri_plugin_sql::{Migration, MigrationKind};
