@@ -33,3 +33,6 @@ ON messages(conversation_id);
 -- Index for faster conversation updates
 CREATE INDEX IF NOT EXISTS idx_conversations_updated 
 ON conversations(updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at 
+ON messages(conversation_id, created_at);

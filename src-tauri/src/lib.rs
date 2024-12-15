@@ -1,3 +1,4 @@
+use crate::parking_lot::Mutex;
 use parking_lot;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::Pool;
@@ -5,7 +6,6 @@ use sqlx::Sqlite;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use tauri::Manager;
-
 type Db = Pool<Sqlite>;
 
 mod apimodels;
@@ -47,8 +47,9 @@ async fn setup_db(data_dir: &std::path::Path) -> Result<Db, Box<dyn StdError>> {
     Ok(pool)
 }
 
-struct AppState {
+pub struct AppState {
     db: Db,
+    pub conversation_id: parking_lot::Mutex<Option<i64>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -94,7 +95,10 @@ pub fn run() {
             app.manage(config::ConfigState(parking_lot::Mutex::new(
                 config::AppConfig::default(),
             )));
-            app.manage(AppState { db });
+            app.manage(AppState {
+                db,
+                conversation_id: Mutex::new(None),
+            });
 
             Ok(())
         })
