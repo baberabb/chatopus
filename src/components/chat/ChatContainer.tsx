@@ -22,7 +22,7 @@ export function ChatContainer() {
     lastAttemptedMessage,
     setLastAttemptedMessage,
     processMessage,
-    clearChat,
+    // clearChat,
   } = useChat();
 
   const handleSend = async () => {

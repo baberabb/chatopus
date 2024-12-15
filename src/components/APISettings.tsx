@@ -4,32 +4,32 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Switch } from "./ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
+// import {
+//   Select,
+//   SelectContent,
+//   SelectItem,
+//   SelectTrigger,
+//   SelectValue,
+// } from "./ui/select";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
   CardContent,
-  CardFooter,
+  // CardFooter,
 } from "./ui/card";
-import { Textarea } from "./ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import {
-  PlusCircle,
-  X,
-  Type,
-  Hash,
-  List,
-  ToggleLeft,
-  Trash2,
-} from "lucide-react";
+// import { Textarea } from "./ui/textarea";
+// import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+// import {
+//   PlusCircle,
+//   X,
+//   Type,
+//   Hash,
+//   List,
+//   ToggleLeft,
+//   Trash2,
+// } from "lucide-react";
 
 interface ProviderSettings {
   api_key: string;

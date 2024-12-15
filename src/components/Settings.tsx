@@ -2,7 +2,7 @@ import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import { Slider } from "./ui/slider";
 import { useZustandTheme } from "../store";
-import { Separator } from "./ui/separator";
+// import { Separator } from "./ui/separator";
 
 const Settings = () => {
   const { theme, toggleTheme } = useZustandTheme();

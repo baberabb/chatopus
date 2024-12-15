@@ -5,6 +5,7 @@ import { Message } from "../../store";
 import { useChatStore, useModelStore } from "../../store";
 
 export function useChat() {
+  // TODO: fix
   const { config } = useModelStore();
   const { 
     messages, 
@@ -23,6 +24,7 @@ export function useChat() {
     details?: string;
   } | null>(null);
   const [lastAttemptedMessage, setLastAttemptedMessage] = useState<string>("");
+  // TODO: fix
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -167,6 +169,7 @@ export function useChat() {
       });
     } finally {
       setIsStreaming(false);
+      // TODO: fix- not callable
       setRetryingMessageId(null);
     }
   };

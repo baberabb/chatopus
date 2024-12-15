@@ -98,7 +98,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   setActiveContent: (content: "inbox" | "trash" | "settings" | "model") => void;
 }
 
-function AppSidebar({ setActiveContent, ...props }: AppSidebarProps) {
+function AppSidebar({ setActiveContent}: AppSidebarProps) {
   const { setOpen } = useSidebar();
   const { theme } = useZustandTheme();
   const {
