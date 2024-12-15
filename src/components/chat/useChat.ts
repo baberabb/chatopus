@@ -74,12 +74,32 @@ export function useChat() {
     }
   }, [streamBuffer, isStreaming, updateLastMessage]);
 
+  const getCurrentTime = () => {
+    const now = new Date();
+    return now.toLocaleTimeString('en-US', { 
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true 
+    });
+  };
+
   const processMessage = async (messageText: string, existingMessageId?: string) => {
     try {
       setError(null);
       const config = await invoke<any>("get_config");
       const streamingEnabled = config.providers[config.active_provider].streaming;
       const currentModelName = config.providers[config.active_provider].model;
+
+      // Always add user message immediately
+      if (!existingMessageId) {
+        addMessage({
+          id: "temp-user-" + Date.now(),
+          content: messageText,
+          role: "user",
+          timestamp: getCurrentTime(),
+          reactions: { thumbsUp: 0 },
+        });
+      }
 
       if (streamingEnabled) {
         setStreamBuffer("");
@@ -98,11 +118,11 @@ export function useChat() {
           }
         } else {
           addMessage({
-            id: "temp-assistant-" + Date.now(), // Temporary ID, will be replaced with DB ID
+            id: "temp-assistant-" + Date.now(),
             content: "",
             role: "assistant",
             model: currentModelName,
-            timestamp: new Date().toLocaleTimeString(),
+            timestamp: getCurrentTime(),
             reactions: { thumbsUp: 0 },
           });
         }
