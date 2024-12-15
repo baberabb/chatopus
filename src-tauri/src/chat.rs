@@ -5,9 +5,8 @@ use crate::config::ConfigState;
 use chrono::{DateTime, Local};
 use parking_lot;
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+use sqlx::{Row as _, Sqlite, SqlitePool, Transaction};
 use std::sync::Arc;
-// Emitter is important! do not delete!!!
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -42,7 +41,7 @@ impl From<DbMessage> for Message {
             timestamp: DateTime::parse_from_rfc3339(&db_msg.created_at)
                 .map(|dt| dt.with_timezone(&Local).format("%I:%M %p").to_string())
                 .unwrap_or_else(|_| Local::now().format("%I:%M %p").to_string()),
-            reactions: Some(MessageReactions { thumbs_up: 0 }), // TODO: Store reactions in metadata
+            reactions: Some(MessageReactions { thumbs_up: 0 }),
         }
     }
 }
@@ -50,44 +49,71 @@ impl From<DbMessage> for Message {
 pub struct ChatHistory(pub Arc<parking_lot::Mutex<Vec<Message>>>);
 
 async fn get_or_create_conversation(db: &SqlitePool) -> Result<i64, ErrorResponse> {
-    // Get the latest active conversation or create a new one
-    let result = sqlx::query!(
+    // Start transaction
+    let mut tx = db.begin().await.map_err(|e| ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
+    // Try to get latest conversation
+    let existing_id = sqlx::query!(
         r#"
         SELECT id as "id!" FROM conversations 
         ORDER BY updated_at DESC 
         LIMIT 1
         "#
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|e| ErrorResponse {
         message: "Database error".to_string(),
         details: Some(e.to_string()),
     })?;
 
-    if let Some(row) = result {
-        Ok(row.id)
+    let conversation_id = if let Some(row) = existing_id {
+        row.id
     } else {
         // Create new conversation
-        let result = sqlx::query!(
+        sqlx::query!(
             r#"
             INSERT INTO conversations (created_at, updated_at)
             VALUES (datetime('now'), datetime('now'))
-            RETURNING id as "id!"
             "#
         )
-        .fetch_one(db)
+        .execute(&mut *tx)
         .await
         .map_err(|e| ErrorResponse {
             message: "Database error".to_string(),
             details: Some(e.to_string()),
         })?;
-        Ok(result.id)
-    }
+
+        // Get the ID of the inserted conversation and convert to i64
+        let id: i32 = sqlx::query_scalar!(
+            r#"
+            SELECT last_insert_rowid() as "id!"
+            "#
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| ErrorResponse {
+            message: "Database error".to_string(),
+            details: Some(e.to_string()),
+        })?;
+
+        i64::from(id)
+    };
+
+    // Commit transaction
+    tx.commit().await.map_err(|e| ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
+    Ok(conversation_id)
 }
 
 async fn save_message(
-    db: &SqlitePool,
+    tx: &mut Transaction<'_, Sqlite>,
     conversation_id: i64,
     role: &str,
     content: &str,
@@ -101,7 +127,7 @@ async fn save_message(
         "#,
         conversation_id
     )
-    .execute(db)
+    .execute(&mut **tx)
     .await
     .map_err(|e| ErrorResponse {
         message: "Database error".to_string(),
@@ -109,18 +135,54 @@ async fn save_message(
     })?;
 
     // Insert message
-    let db_message = sqlx::query_as!(
-        DbMessage,
+    sqlx::query!(
         r#"
         INSERT INTO messages (conversation_id, role, content, created_at)
         VALUES (?, ?, ?, datetime('now'))
-        RETURNING id as "id!", conversation_id as "conversation_id!", role as "role!", content as "content!", created_at as "created_at!", metadata
         "#,
         conversation_id,
         role,
         content
     )
-    .fetch_one(db)
+    .execute(&mut **tx)
+    .await
+    .map_err(|e| ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
+    // Get the inserted message ID and convert to i64
+    let message_id: i32 = sqlx::query_scalar!(
+        r#"
+        SELECT last_insert_rowid() as "id!"
+        "#
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(|e| ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
+    let message_id = i64::from(message_id);
+
+    // Fetch the complete message
+    let db_message = sqlx::query_as!(
+        DbMessage,
+        r#"
+        SELECT 
+            id as "id!",
+            conversation_id as "conversation_id!",
+            role as "role!",
+            content as "content!",
+            created_at as "created_at!",
+            metadata
+        FROM messages
+        WHERE id = ?
+        "#,
+        message_id
+    )
+    .fetch_one(&mut **tx)
     .await
     .map_err(|e| ErrorResponse {
         message: "Database error".to_string(),
@@ -141,10 +203,17 @@ pub async fn process_message(
     println!("Received message: {}", message);
 
     let db = app_handle.state::<crate::AppState>().db.clone();
+
+    // Start transaction
+    let mut tx = db.begin().await.map_err(|e| ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
     let conversation_id = get_or_create_conversation(&db).await?;
 
     // Save user message to DB and add to in-memory history
-    let user_message = save_message(&db, conversation_id, "user", &message).await?;
+    let user_message = save_message(&mut tx, conversation_id, "user", &message).await?;
     chat_history.0.lock().push(user_message.clone());
 
     // Get current provider config
@@ -212,8 +281,15 @@ pub async fn process_message(
     };
 
     // Save assistant message to DB and add to in-memory history
-    let assistant_message = save_message(&db, conversation_id, "assistant", &full_response).await?;
+    let assistant_message =
+        save_message(&mut tx, conversation_id, "assistant", &full_response).await?;
     chat_history.0.lock().push(assistant_message);
+
+    // Commit transaction
+    tx.commit().await.map_err(|e| ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
 
     Ok(Response {
         reply: full_response,
@@ -236,7 +312,13 @@ pub async fn get_chat_history(
         let messages = sqlx::query_as!(
             DbMessage,
             r#"
-            SELECT id as "id!", conversation_id as "conversation_id!", role as "role!", content as "content!", created_at as "created_at!", metadata
+            SELECT 
+                id as "id!",
+                conversation_id as "conversation_id!",
+                role as "role!",
+                content as "content!",
+                created_at as "created_at!",
+                metadata
             FROM messages
             WHERE conversation_id = ?
             ORDER BY created_at ASC
@@ -258,7 +340,6 @@ pub async fn get_chat_history(
         *history = messages.clone();
         Ok(messages)
     } else {
-        // Return in-memory history
         Ok(chat_history.0.lock().clone())
     }
 }
@@ -270,16 +351,28 @@ pub async fn clear_chat_history(
 ) -> Result<(), ErrorResponse> {
     let db = app_handle.state::<crate::AppState>().db.clone();
 
-    // Create a new conversation
+    // Start transaction
+    let mut tx = db.begin().await.map_err(|e| ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
+    // Create new conversation
     sqlx::query!(
         r#"
         INSERT INTO conversations (created_at, updated_at)
         VALUES (datetime('now'), datetime('now'))
         "#
     )
-    .execute(&db)
+    .execute(&mut *tx)
     .await
     .map_err(|e| ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
+    // Commit transaction
+    tx.commit().await.map_err(|e| ErrorResponse {
         message: "Database error".to_string(),
         details: Some(e.to_string()),
     })?;
