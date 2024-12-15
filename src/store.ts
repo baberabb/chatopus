@@ -28,9 +28,22 @@ export interface Message {
   };
 }
 
+export interface Conversation {
+  id: string;
+  title: string;
+  preview: string;
+  model: string;
+  messageCount: number;
+  timestamp: string;
+}
+
 interface ChatStore {
   messages: Message[];
+  conversations: Conversation[];
+  currentConversationId: string | null;
   setMessages: (messages: Message[]) => void;
+  setConversations: (conversations: Conversation[]) => void;
+  setCurrentConversationId: (id: string | null) => void;
   addMessage: (message: Message) => void;
   updateLastMessage: (content: string) => void;
   clearMessages: () => void;
@@ -153,7 +166,11 @@ const useThemeStore = create<ThemeStore>((set) => {
 
 export const useChatStore = create<ChatStore>((set) => ({
   messages: [],
+  conversations: [],
+  currentConversationId: null,
   setMessages: (messages) => set({ messages }),
+  setConversations: (conversations) => set({ conversations }),
+  setCurrentConversationId: (id) => set({ currentConversationId: id }),
   addMessage: (message) => set((state) => ({ 
     messages: [...state.messages, message] 
   })),

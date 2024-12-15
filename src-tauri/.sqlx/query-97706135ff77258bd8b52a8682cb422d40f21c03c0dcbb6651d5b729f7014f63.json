@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT \n                id as \"id!\",\n                conversation_id as \"conversation_id!\",\n                role as \"role!\",\n                content as \"content!\",\n                created_at as \"created_at!\",\n                metadata\n            FROM messages\n            WHERE conversation_id = ?\n            ORDER BY created_at ASC\n            ",
+  "query": "\n            SELECT \n                id as \"id!\",\n                conversation_id as \"conversation_id!\",\n                role as \"role!\",\n                content as \"content!\",\n                created_at as \"created_at!\",\n                metadata\n            FROM messages\n            WHERE conversation_id = ?\n            ORDER BY created_at ASC\n        ",
   "describe": {
     "columns": [
       {
@@ -46,5 +46,5 @@
       true
     ]
   },
-  "hash": "50c18a745ff26829af8686c0be6dc34dda080e6ab0e521c07917e2454445bbee"
+  "hash": "97706135ff77258bd8b52a8682cb422d40f21c03c0dcbb6651d5b729f7014f63"
 }

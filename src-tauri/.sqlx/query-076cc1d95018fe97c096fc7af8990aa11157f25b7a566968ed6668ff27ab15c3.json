@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "\n            SELECT last_insert_rowid() as \"id!\"\n            ",
+  "query": "SELECT last_insert_rowid()",
   "describe": {
     "columns": [
       {
-        "name": "id!",
+        "name": "last_insert_rowid()",
         "ordinal": 0,
         "type_info": "Int"
       }
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "b31191f3bcffad365b247a0736899f79b811c33110374be0deb3182f5a0d68a2"
+  "hash": "076cc1d95018fe97c096fc7af8990aa11157f25b7a566968ed6668ff27ab15c3"
 }

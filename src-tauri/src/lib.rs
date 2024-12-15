@@ -19,8 +19,11 @@ async fn setup_db(data_dir: &std::path::Path) -> Result<Db, Box<dyn StdError>> {
     std::fs::create_dir_all(data_dir)?;
 
     // Setup database path
-    let db_path = data_dir.join("db.sqlite");
+    let db_path = data_dir.join("chatopus.db");
     let db_url = format!("sqlite:{}", db_path.to_str().unwrap());
+
+    println!("Database path: {}", db_path.display());
+    println!("Database URL: {}", db_url);
 
     // Create connection pool
     let pool = SqlitePoolOptions::new()
@@ -28,19 +31,33 @@ async fn setup_db(data_dir: &std::path::Path) -> Result<Db, Box<dyn StdError>> {
         .connect(&db_url)
         .await?;
 
+    // Enable foreign keys
+    sqlx::query!("PRAGMA foreign_keys = ON;")
+        .execute(&pool)
+        .await?;
+
+    println!("Database connection pool created");
+
     // Run migrations
     match sqlx::migrate!("./migrations").run(&pool).await {
         Ok(_) => {
             println!("Migrations executed successfully");
+
+            // Verify tables exist
+            let tables = sqlx::query!(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('conversations', 'messages', 'models')"
+            )
+            .fetch_all(&pool)
+            .await?;
+
+            println!(
+                "Found tables: {:?}",
+                tables.iter().map(|t| &t.name).collect::<Vec<_>>()
+            );
         }
         Err(e) => {
-            if !e
-                .to_string()
-                .contains("was previously applied but has been modified")
-            {
-                return Err(Box::new(e));
-            }
-            println!("Ignoring modified migration error");
+            println!("Migration error: {}", e);
+            return Err(Box::new(e));
         }
     }
 
@@ -72,6 +89,8 @@ pub fn run() {
             chat::process_message,
             chat::get_chat_history,
             chat::clear_chat_history,
+            chat::get_conversations,
+            chat::load_conversation_messages,
             config::get_config,
             config::update_config,
             config::update_provider_settings,
@@ -83,6 +102,8 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("failed to get app data dir");
+
+            println!("App data directory: {}", data_dir.display());
 
             // Initialize database
             let runtime = tokio::runtime::Runtime::new()?;

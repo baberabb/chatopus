@@ -1,16 +1,13 @@
 import React, { useRef, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { Paperclip, Zap, CornerRightUp } from "lucide-react";
-import { ulid } from "ulidx";
 import { useZustandTheme } from "../../store";
 import { useModel } from "../../contexts/ModelContext";
 import ErrorBoundary from "../ErrorBoundary";
 import { ErrorDisplay } from "../ErrorDisplay";
 import { MessageBlock } from "./MessageBlock";
-import { ChatContainerProps, Message } from "./types";
 import { useChat } from "./useChat";
 
-export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
+export function ChatContainer() {
   const { theme } = useZustandTheme();
   const { currentModel } = useModel();
   const messageListRef = useRef<HTMLDivElement>(null);
@@ -20,59 +17,16 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
     input,
     setInput,
     isStreaming,
+    isLoading,
     error,
     lastAttemptedMessage,
     setLastAttemptedMessage,
     processMessage,
-    setMessages,
+    clearChat,
   } = useChat();
-
-  // Load chat history on mount
-  useEffect(() => {
-    const loadChatHistory = async () => {
-      try {
-        const history = await invoke<Message[]>("get_chat_history");
-        const formattedHistory = history.map((msg) => ({
-          ...msg,
-          id: ulid(),
-          timestamp: new Date().toLocaleTimeString(),
-          reactions: { thumbsUp: 0 },
-        }));
-        setMessages(formattedHistory);
-      } catch (error) {
-        console.error("Error loading chat history:", error);
-      }
-    };
-
-    if (!selectedArchivedChat) {
-      loadChatHistory();
-    }
-  }, [setMessages, selectedArchivedChat]);
-
-  // Effect to handle archived chat selection
-  useEffect(() => {
-    if (selectedArchivedChat) {
-      const archivedMessage: Message = {
-        id: selectedArchivedChat.id,
-        content: selectedArchivedChat.preview,
-        role: "assistant",
-        timestamp: selectedArchivedChat.timestamp,
-        reactions: { thumbsUp: 0 },
-      };
-      setMessages([archivedMessage]);
-    }
-  }, [selectedArchivedChat, setMessages]);
 
   const handleSend = async () => {
     if (input && !isStreaming) {
-      const newMessage: Message = {
-        id: ulid(),
-        content: input,
-        role: "user",
-        timestamp: new Date().toLocaleTimeString(),
-        reactions: { thumbsUp: 0 },
-      };
-      setMessages([...messages, newMessage]);
       setLastAttemptedMessage(input);
       setInput("");
       await processMessage(input);
@@ -95,20 +49,16 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
   };
 
   const handleReact = (messageId: string) => {
-    setMessages(
-      messages.map((msg) =>
-        msg.id === messageId
-          ? {
-              ...msg,
-              reactions: {
-                ...msg.reactions,
-                thumbsUp: (msg.reactions?.thumbsUp || 0) + 1,
-              },
-            }
-          : msg
-      )
-    );
+    // TODO: Implement reaction persistence
+    console.log("React to message:", messageId);
   };
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   return (
     <ErrorBoundary>
@@ -136,18 +86,28 @@ export function ChatContainer({ selectedArchivedChat }: ChatContainerProps) {
             style={{ backgroundColor: theme.background }}
             ref={messageListRef}
           >
-            {messages.map((msg, index) => (
-              <React.Fragment key={msg.id}>
-                {index > 0 && messages[index - 1].role !== msg.role && (
-                  <div className="h-4" />
-                )}
-                <MessageBlock
-                  message={msg}
-                  onReact={handleReact}
-                  isStreaming={isStreaming && index === messages.length - 1}
-                />
-              </React.Fragment>
-            ))}
+            {isLoading ? (
+              <div className="flex justify-center items-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex justify-center items-center h-full text-gray-500">
+                Start a new conversation
+              </div>
+            ) : (
+              messages.map((msg, index) => (
+                <React.Fragment key={msg.id}>
+                  {index > 0 && messages[index - 1].role !== msg.role && (
+                    <div className="h-4" />
+                  )}
+                  <MessageBlock
+                    message={msg}
+                    onReact={handleReact}
+                    isStreaming={isStreaming && index === messages.length - 1}
+                  />
+                </React.Fragment>
+              ))
+            )}
             {error && (
               <ErrorDisplay
                 message={error.message}

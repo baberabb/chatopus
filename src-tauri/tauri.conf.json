@@ -1,7 +1,7 @@
 {
-  "productName": "chatopus",
-  "version": "0.0.0",
-  "identifier": "chatupus",
+  "productName": "wrapper",
+  "version": "0.0.1",
+  "identifier": "wrapper",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",

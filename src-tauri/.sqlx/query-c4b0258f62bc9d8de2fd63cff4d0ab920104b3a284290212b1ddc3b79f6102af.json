@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT \n            c.id as \"id!\",\n            COALESCE(\n                (SELECT content FROM messages \n                WHERE conversation_id = c.id \n                AND role = 'user' \n                ORDER BY created_at ASC \n                LIMIT 1),\n                'New Chat'\n            ) as \"title!: String\",\n            COALESCE(\n                (SELECT content FROM messages \n                WHERE conversation_id = c.id \n                ORDER BY created_at DESC \n                LIMIT 1),\n                ''\n            ) as \"preview!: String\",\n            COALESCE(\n                (SELECT json_extract(metadata, '$.model')\n                FROM messages \n                WHERE conversation_id = c.id \n                AND metadata IS NOT NULL \n                ORDER BY created_at DESC \n                LIMIT 1),\n                'Unknown Model'\n            ) as \"model!: String\",\n            COALESCE(\n                (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id),\n                0\n            ) as \"message_count!: i64\",\n            COALESCE(\n                (SELECT created_at FROM messages \n                WHERE conversation_id = c.id \n                ORDER BY created_at DESC \n                LIMIT 1),\n                c.created_at\n            ) as \"timestamp!: String\"\n        FROM conversations c\n        ORDER BY c.updated_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "title!: String",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "preview!: String",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "model!: String",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "message_count!: i64",
+        "ordinal": 4,
+        "type_info": "Int"
+      },
+      {
+        "name": "timestamp!: String",
+        "ordinal": 5,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c4b0258f62bc9d8de2fd63cff4d0ab920104b3a284290212b1ddc3b79f6102af"
+}

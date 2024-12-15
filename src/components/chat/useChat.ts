@@ -1,13 +1,21 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ulid } from "ulidx";
-import { Message } from "./types";
+import { Message } from "../../store";
 import { useChatStore, useModelStore } from "../../store";
 
 export function useChat() {
   const { config } = useModelStore();
-  const { messages, addMessage, updateLastMessage, setMessages } = useChatStore();
+  const { 
+    messages, 
+    currentConversationId,
+    setMessages, 
+    setCurrentConversationId,
+    addMessage, 
+    updateLastMessage,
+    clearMessages
+  } = useChatStore();
+  
   const [input, setInput] = useState("");
   const [streamBuffer, setStreamBuffer] = useState("");
   const [error, setError] = useState<{
@@ -17,6 +25,37 @@ export function useChat() {
   const [lastAttemptedMessage, setLastAttemptedMessage] = useState<string>("");
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load messages when conversation changes
+  useEffect(() => {
+    const loadMessages = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        if (currentConversationId) {
+          const messages = await invoke<Message[]>("load_conversation_messages", {
+            conversationId: parseInt(currentConversationId, 10)
+          });
+          setMessages(messages);
+        } else {
+          const messages = await invoke<Message[]>("get_chat_history");
+          setMessages(messages);
+        }
+      } catch (error: any) {
+        console.error("Error loading messages:", error);
+        setError({
+          message: "Failed to load messages",
+          details: error?.message,
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadMessages();
+  }, [currentConversationId]);
 
   useEffect(() => {
     const unlisten = listen("stream-response", (event) => {
@@ -59,7 +98,7 @@ export function useChat() {
           }
         } else {
           addMessage({
-            id: ulid(),
+            id: "temp-assistant-" + Date.now(), // Temporary ID, will be replaced with DB ID
             content: "",
             role: "assistant",
             model: currentModelName,
@@ -72,6 +111,17 @@ export function useChat() {
       const response = await invoke<{ reply: string }>("process_message", {
         message: messageText,
       });
+
+      // After successful processing, reload messages to get proper DB IDs
+      if (currentConversationId) {
+        const messages = await invoke<Message[]>("load_conversation_messages", {
+          conversationId: parseInt(currentConversationId, 10)
+        });
+        setMessages(messages);
+      } else {
+        const messages = await invoke<Message[]>("get_chat_history");
+        setMessages(messages);
+      }
 
       if (!streamingEnabled && response && response.reply) {
         if (existingMessageId) {
@@ -86,15 +136,6 @@ export function useChat() {
             };
             setMessages(updatedMessages);
           }
-        } else {
-          addMessage({
-            id: ulid(),
-            content: response.reply,
-            role: "assistant",
-            model: currentModelName,
-            timestamp: new Date().toLocaleTimeString(),
-            reactions: { thumbsUp: 0 },
-          });
         }
       }
     } catch (error: any) {
@@ -110,15 +151,33 @@ export function useChat() {
     }
   };
 
+  const clearChat = async () => {
+    try {
+      await invoke("clear_chat_history");
+      clearMessages();
+      setCurrentConversationId(null);
+    } catch (error: any) {
+      console.error("Error clearing chat history:", error);
+      setError({
+        message: "Failed to clear chat history",
+        details: error?.message,
+      });
+    }
+  };
+
   return {
     messages,
+    currentConversationId,
     input,
     setInput,
     isStreaming,
+    isLoading,
     error,
     lastAttemptedMessage,
     setLastAttemptedMessage,
     processMessage,
+    clearChat,
     setMessages,
+    setCurrentConversationId
   };
 }

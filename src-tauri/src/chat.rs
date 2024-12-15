@@ -6,7 +6,8 @@ use crate::AppState;
 use chrono::{DateTime, Local};
 use parking_lot;
 use serde::{Deserialize, Serialize};
-use sqlx::{Sqlite, SqlitePool, Transaction};
+use serde_json::Value;
+use sqlx::{Sqlite, Transaction};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -21,6 +22,16 @@ pub struct ErrorResponse {
     details: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConversationInfo {
+    id: i64,
+    title: String,
+    preview: String,
+    model: String,
+    message_count: i64,
+    timestamp: String,
+}
+
 // Database models
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 struct DbMessage {
@@ -32,11 +43,28 @@ struct DbMessage {
     metadata: Option<String>,
 }
 
+#[derive(Debug, sqlx::FromRow)]
+struct ConversationRow {
+    id: i64,
+    title: String,   // COALESCE ensures non-null
+    preview: String, // COALESCE ensures non-null
+    model: String,   // COALESCE ensures non-null
+    message_count: i64,
+    timestamp: String, // COALESCE ensures non-null
+}
+
 impl From<DbMessage> for Message {
     fn from(db_msg: DbMessage) -> Self {
         let timestamp = DateTime::parse_from_rfc3339(&db_msg.created_at)
             .map(|dt| dt.with_timezone(&Local).format("%I:%M %p").to_string())
             .unwrap_or_else(|_| Local::now().format("%I:%M %p").to_string());
+
+        // Extract model from metadata if it exists
+        let model = db_msg.metadata.and_then(|metadata| {
+            serde_json::from_str::<Value>(&metadata)
+                .ok()
+                .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from))
+        });
 
         Message {
             id: db_msg.id.to_string(),
@@ -44,13 +72,12 @@ impl From<DbMessage> for Message {
             content: db_msg.content,
             timestamp,
             reactions: Some(MessageReactions { thumbs_up: 0 }),
+            model,
         }
     }
 }
 
 pub struct ChatHistory(pub Arc<parking_lot::Mutex<Vec<Message>>>);
-
-// We'll store the conversation_id in AppState to avoid repeated DB queries
 
 fn db_error(e: sqlx::Error) -> ErrorResponse {
     ErrorResponse {
@@ -111,6 +138,7 @@ async fn save_message(
     conversation_id: i64,
     role: &str,
     content: &str,
+    model: Option<&str>,
 ) -> Result<Message, ErrorResponse> {
     // Update conversation timestamp
     sqlx::query!(
@@ -125,15 +153,19 @@ async fn save_message(
     .await
     .map_err(db_error)?;
 
+    // Create metadata JSON if model is provided
+    let metadata = model.map(|m| format!(r#"{{"model":"{}"}}"#, m));
+
     // Insert the message
     sqlx::query!(
         r#"
-        INSERT INTO messages (conversation_id, role, content, created_at)
-        VALUES (?, ?, ?, datetime('now'))
+        INSERT INTO messages (conversation_id, role, content, created_at, metadata)
+        VALUES (?, ?, ?, datetime('now'), ?)
         "#,
         conversation_id,
         role,
-        content
+        content,
+        metadata
     )
     .execute(&mut **tx)
     .await
@@ -153,6 +185,7 @@ async fn save_message(
         content: content.to_string(),
         timestamp,
         reactions: Some(MessageReactions { thumbs_up: 0 }),
+        model: model.map(String::from),
     };
 
     Ok(msg)
@@ -199,7 +232,7 @@ pub async fn process_message(
     // Short transaction for user message
     {
         let mut tx = db.begin().await.map_err(db_error)?;
-        let user_message = save_message(&mut tx, conversation_id, "user", &message).await?;
+        let user_message = save_message(&mut tx, conversation_id, "user", &message, None).await?;
         tx.commit().await.map_err(db_error)?;
 
         {
@@ -209,12 +242,10 @@ pub async fn process_message(
     }
 
     // Call provider outside of a transaction to avoid holding DB locks
-    let provider =
-        ProviderFactory::create_provider(&provider_type, provider_config).map_err(|e| {
-            ErrorResponse {
-                message: "Provider initialization failed".to_string(),
-                details: Some(e),
-            }
+    let provider = ProviderFactory::create_provider(&provider_type, provider_config.clone())
+        .map_err(|e| ErrorResponse {
+            message: "Provider initialization failed".to_string(),
+            details: Some(e),
         })?;
 
     let history_snapshot = {
@@ -255,8 +286,14 @@ pub async fn process_message(
     // Short transaction for assistant message
     {
         let mut tx = db.begin().await.map_err(db_error)?;
-        let assistant_message =
-            save_message(&mut tx, conversation_id, "assistant", &full_response).await?;
+        let assistant_message = save_message(
+            &mut tx,
+            conversation_id,
+            "assistant",
+            &full_response,
+            Some(&provider_config.model),
+        )
+        .await?;
         tx.commit().await.map_err(db_error)?;
 
         {
@@ -354,4 +391,120 @@ pub async fn clear_chat_history(
     chat_history.0.lock().clear();
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_conversations(
+    app_handle: AppHandle,
+) -> Result<Vec<ConversationInfo>, ErrorResponse> {
+    let app_state = app_handle.state::<AppState>();
+    let db = &app_state.db;
+
+    let conversations = sqlx::query_as!(
+        ConversationRow,
+        r#"
+        SELECT 
+            c.id as "id!",
+            COALESCE(
+                (SELECT content FROM messages 
+                WHERE conversation_id = c.id 
+                AND role = 'user' 
+                ORDER BY created_at ASC 
+                LIMIT 1),
+                'New Chat'
+            ) as "title!: String",
+            COALESCE(
+                (SELECT content FROM messages 
+                WHERE conversation_id = c.id 
+                ORDER BY created_at DESC 
+                LIMIT 1),
+                ''
+            ) as "preview!: String",
+            COALESCE(
+                (SELECT json_extract(metadata, '$.model')
+                FROM messages 
+                WHERE conversation_id = c.id 
+                AND metadata IS NOT NULL 
+                ORDER BY created_at DESC 
+                LIMIT 1),
+                'Unknown Model'
+            ) as "model!: String",
+            COALESCE(
+                (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id),
+                0
+            ) as "message_count!: i64",
+            COALESCE(
+                (SELECT created_at FROM messages 
+                WHERE conversation_id = c.id 
+                ORDER BY created_at DESC 
+                LIMIT 1),
+                c.created_at
+            ) as "timestamp!: String"
+        FROM conversations c
+        ORDER BY c.updated_at DESC
+        "#
+    )
+    .fetch_all(db)
+    .await
+    .map_err(db_error)?;
+
+    Ok(conversations
+        .into_iter()
+        .map(|row| ConversationInfo {
+            id: row.id,
+            title: row.title,
+            preview: row.preview,
+            model: row.model,
+            message_count: row.message_count,
+            timestamp: row.timestamp,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub async fn load_conversation_messages(
+    conversation_id: i64,
+    app_handle: AppHandle,
+    chat_history: State<'_, ChatHistory>,
+) -> Result<Vec<Message>, ErrorResponse> {
+    let app_state = app_handle.state::<AppState>();
+    let db = &app_state.db;
+
+    // Update current conversation ID
+    {
+        let mut guard = app_state.conversation_id.lock();
+        *guard = Some(conversation_id);
+    }
+
+    // Load messages for the conversation
+    let messages = sqlx::query_as!(
+        DbMessage,
+        r#"
+            SELECT 
+                id as "id!",
+                conversation_id as "conversation_id!",
+                role as "role!",
+                content as "content!",
+                created_at as "created_at!",
+                metadata
+            FROM messages
+            WHERE conversation_id = ?
+            ORDER BY created_at ASC
+        "#,
+        conversation_id
+    )
+    .fetch_all(db)
+    .await
+    .map_err(db_error)?
+    .into_iter()
+    .map(Message::from)
+    .collect::<Vec<Message>>();
+
+    // Update in-memory history
+    {
+        let mut history = chat_history.0.lock();
+        *history = messages.clone();
+    }
+
+    Ok(messages)
 }

@@ -10,6 +10,7 @@ pub struct Message {
     pub timestamp: String,
     #[serde(default)]
     pub reactions: Option<MessageReactions>,
+    pub model: Option<String>, // Add model field
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +55,7 @@ pub trait ChatProvider: Send + Sync {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ProviderConfig {
     pub api_key: String,
     pub model: String,

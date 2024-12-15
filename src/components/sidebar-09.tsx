@@ -33,65 +33,21 @@ import Settings from "./Settings";
 import { ModelSettings } from "./ModelSettings";
 import { ThemeToggle } from "./ThemeToggle";
 import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
-import { useZustandTheme } from "../store";
+import { useZustandTheme, useChatStore } from "../store";
+import { invoke } from "@tauri-apps/api/core";
 
-interface ArchivedChat {
-  id: string;
-  title: string;
-  preview: string;
-  model: string;
-  messageCount: number;
-  timestamp: string;
-}
-
-// Updated sample data for chat archive
 const data = {
   user: {
     name: "Alex Chen",
     email: "alex@example.com",
     avatar: "/avatars/alex.jpg",
   },
-  chats: [
-    {
-      id: "chat-1",
-      title: "Website Optimization Analysis",
-      lastMessage:
-        "Here's a detailed breakdown of potential performance improvements for your website...",
-      timestamp: "2:34 PM",
-      preview:
-        "Based on the analysis of your current website architecture, I've identified several key areas where we can optimize performance. The main bottlenecks appear to be...",
-      model: "Claude-3",
-      messageCount: 24,
-    },
-    {
-      id: "chat-2",
-      title: "Python Data Processing Script",
-      lastMessage:
-        "The modified script now handles JSON inputs more efficiently...",
-      timestamp: "11:15 AM",
-      preview:
-        "I've updated the data processing pipeline to include error handling and better memory management. Here's the revised code...",
-      model: "Claude-3",
-      messageCount: 15,
-    },
-    {
-      id: "chat-3",
-      title: "Marketing Strategy Review",
-      lastMessage: "These are the key metrics we should focus on...",
-      timestamp: "Yesterday",
-      preview:
-        "Based on your target audience and goals, I recommend focusing on these key performance indicators...",
-      model: "Claude-3",
-      messageCount: 32,
-    },
-  ],
 };
 
 export default function Page() {
   const [activeContent, setActiveContent] = React.useState<
     "inbox" | "trash" | "settings" | "model"
   >("inbox");
-  const [selectedChat, setSelectedChat] = React.useState<ArchivedChat>();
   const { theme } = useZustandTheme();
 
   return (
@@ -106,13 +62,10 @@ export default function Page() {
         } as React.CSSProperties
       }
     >
-      <AppSidebar
-        setActiveContent={setActiveContent}
-        setSelectedChat={setSelectedChat}
-      />
+      <AppSidebar setActiveContent={setActiveContent} />
       <SidebarInset className="flex flex-col h-[calc(100vh-64px)]">
         {activeContent === "inbox" ? (
-          <ChatContainer selectedArchivedChat={selectedChat} />
+          <ChatContainer />
         ) : activeContent === "trash" ? (
           <TrashContent />
         ) : activeContent === "model" ? (
@@ -135,17 +88,50 @@ export default function Page() {
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   setActiveContent: (content: "inbox" | "trash" | "settings" | "model") => void;
-  setSelectedChat: (chat: ArchivedChat | undefined) => void;
 }
 
-function AppSidebar({
-  setActiveContent,
-  setSelectedChat,
-  ...props
-}: AppSidebarProps) {
-  const [chats] = React.useState(data.chats);
+function AppSidebar({ setActiveContent, ...props }: AppSidebarProps) {
   const { setOpen } = useSidebar();
   const { theme } = useZustandTheme();
+  const {
+    conversations,
+    currentConversationId,
+    setCurrentConversationId,
+    setConversations,
+  } = useChatStore();
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Load conversations
+  React.useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        setIsLoading(true);
+        const convos = await invoke<any[]>("get_conversations");
+        setConversations(convos);
+      } catch (err: any) {
+        console.error("Error loading conversations:", err);
+        setError(err?.message || "Failed to load conversations");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadConversations();
+  }, [setConversations]);
+
+  const handleChatSelect = async (chatId: string) => {
+    try {
+      await invoke("load_conversation_messages", {
+        conversationId: parseInt(chatId, 10),
+      });
+      setCurrentConversationId(chatId);
+      setOpen(true);
+    } catch (err: any) {
+      console.error("Error loading conversation:", err);
+      setError(err?.message || "Failed to load conversation");
+    }
+  };
 
   return (
     <Sidebar
@@ -202,7 +188,7 @@ function AppSidebar({
           style={{ borderColor: theme.border }}
         >
           <div className="flex w-full items-center justify-between">
-            <div className="text-base font-medium">Chat Archive</div>
+            <div className="text-base font-medium">Chat History</div>
             <div className="flex items-center space-x-2">
               <Label className="flex items-center gap-2 text-sm">
                 <span>Favorites</span>
@@ -215,36 +201,49 @@ function AppSidebar({
         </SidebarHeader>
         <SidebarContent>
           <div className="px-0">
-            {chats.map((chat) => (
-              <button
-                key={chat.id}
-                className="w-full text-left flex flex-col items-start gap-2 whitespace-nowrap border-b p-4 text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                onClick={() => {
-                  setSelectedChat(chat);
-                  setOpen(true);
-                }}
-                style={{ borderColor: theme.border }}
-              >
-                <div className="flex w-full items-center gap-2">
-                  <span className="font-medium">{chat.title}</span>
-                  <span className="ml-auto text-xs">{chat.timestamp}</span>
-                </div>
-                <div
-                  className="flex w-full items-center gap-2 text-xs"
-                  style={{ color: theme.textSecondary }}
+            {isLoading ? (
+              <div className="flex justify-center items-center p-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
+              </div>
+            ) : error ? (
+              <div className="p-4 text-red-500 text-sm">{error}</div>
+            ) : conversations.length === 0 ? (
+              <div className="p-4 text-sm text-gray-500">
+                No conversations yet
+              </div>
+            ) : (
+              conversations.map((chat) => (
+                <button
+                  key={chat.id}
+                  className={`w-full text-left flex flex-col items-start gap-2 whitespace-nowrap border-b p-4 text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                    currentConversationId === chat.id ? "bg-sidebar-accent" : ""
+                  }`}
+                  onClick={() => handleChatSelect(chat.id)}
+                  style={{ borderColor: theme.border }}
                 >
-                  <span>{chat.model}</span>
-                  <span>•</span>
-                  <span>{chat.messageCount} messages</span>
-                </div>
-                <span
-                  className="line-clamp-2 w-[260px] whitespace-break-spaces text-xs"
-                  style={{ color: theme.textSecondary }}
-                >
-                  {chat.preview}
-                </span>
-              </button>
-            ))}
+                  <div className="flex w-full items-center gap-2">
+                    <span className="font-medium">
+                      {chat.title || "New Chat"}
+                    </span>
+                    <span className="ml-auto text-xs">{chat.timestamp}</span>
+                  </div>
+                  <div
+                    className="flex w-full items-center gap-2 text-xs"
+                    style={{ color: theme.textSecondary }}
+                  >
+                    <span>{chat.model}</span>
+                    <span>•</span>
+                    <span>{chat.messageCount} messages</span>
+                  </div>
+                  <span
+                    className="line-clamp-2 w-[260px] whitespace-break-spaces text-xs"
+                    style={{ color: theme.textSecondary }}
+                  >
+                    {chat.preview}
+                  </span>
+                </button>
+              ))
+            )}
           </div>
         </SidebarContent>
       </Sidebar>
