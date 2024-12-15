@@ -1,5 +1,13 @@
 import * as React from "react";
-import { BadgeCheck, Bell, Command, LogOut, Sparkles } from "lucide-react";
+import {
+  BadgeCheck,
+  Bell,
+  Command,
+  LogOut,
+  Sparkles,
+  Trash2,
+  Plus,
+} from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import {
   DropdownMenu,
@@ -133,6 +141,35 @@ function AppSidebar({ setActiveContent, ...props }: AppSidebarProps) {
     }
   };
 
+  const handleDelete = async (e: React.MouseEvent, chatId: string) => {
+    e.stopPropagation(); // Prevent chat selection when clicking delete
+    try {
+      await invoke("delete_conversation", {
+        conversationId: parseInt(chatId, 10),
+      });
+      setConversations(conversations.filter((chat) => chat.id !== chatId));
+      if (currentConversationId === chatId) {
+        setCurrentConversationId(null);
+      }
+    } catch (err: any) {
+      console.error("Error deleting conversation:", err);
+      setError(err?.message || "Failed to delete conversation");
+    }
+  };
+
+  const handleNewChat = async () => {
+    try {
+      await invoke("clear_chat_history");
+      setCurrentConversationId(null);
+      // Reload conversations to get the new one
+      const convos = await invoke<any[]>("get_conversations");
+      setConversations(convos);
+    } catch (err: any) {
+      console.error("Error creating new chat:", err);
+      setError(err?.message || "Failed to create new chat");
+    }
+  };
+
   return (
     <Sidebar
       collapsible="icon"
@@ -190,6 +227,13 @@ function AppSidebar({ setActiveContent, ...props }: AppSidebarProps) {
           <div className="flex w-full items-center justify-between">
             <div className="text-base font-medium">Chat History</div>
             <div className="flex items-center space-x-2">
+              <button
+                onClick={handleNewChat}
+                className="flex items-center gap-1 text-sm px-2 py-1 rounded hover:bg-sidebar-accent transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                New Chat
+              </button>
               <Label className="flex items-center gap-2 text-sm">
                 <span>Favorites</span>
                 <Switch className="shadow-none" />
@@ -213,35 +257,46 @@ function AppSidebar({ setActiveContent, ...props }: AppSidebarProps) {
               </div>
             ) : (
               conversations.map((chat) => (
-                <button
+                <div
                   key={chat.id}
                   className={`w-full text-left flex flex-col items-start gap-2 whitespace-nowrap border-b p-4 text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
                     currentConversationId === chat.id ? "bg-sidebar-accent" : ""
                   }`}
-                  onClick={() => handleChatSelect(chat.id)}
                   style={{ borderColor: theme.border }}
                 >
-                  <div className="flex w-full items-center gap-2">
-                    <span className="font-medium">
-                      {chat.title || "New Chat"}
+                  <button
+                    className="w-full flex flex-col items-start gap-2"
+                    onClick={() => handleChatSelect(chat.id)}
+                  >
+                    <div className="flex w-full items-center gap-2">
+                      <span className="font-medium">
+                        {chat.title || "New Chat"}
+                      </span>
+                      <span className="ml-auto text-xs">{chat.timestamp}</span>
+                    </div>
+                    <div
+                      className="flex w-full items-center gap-2 text-xs"
+                      style={{ color: theme.textSecondary }}
+                    >
+                      <span>{chat.model}</span>
+                      <span>•</span>
+                      <span>{chat.messageCount} messages</span>
+                    </div>
+                    <span
+                      className="line-clamp-2 w-[260px] whitespace-break-spaces text-xs"
+                      style={{ color: theme.textSecondary }}
+                    >
+                      {chat.preview}
                     </span>
-                    <span className="ml-auto text-xs">{chat.timestamp}</span>
-                  </div>
-                  <div
-                    className="flex w-full items-center gap-2 text-xs"
-                    style={{ color: theme.textSecondary }}
+                  </button>
+                  <button
+                    onClick={(e) => handleDelete(e, chat.id)}
+                    className="absolute right-2 top-2 p-2 hover:text-red-500 transition-colors"
+                    title="Delete conversation"
                   >
-                    <span>{chat.model}</span>
-                    <span>•</span>
-                    <span>{chat.messageCount} messages</span>
-                  </div>
-                  <span
-                    className="line-clamp-2 w-[260px] whitespace-break-spaces text-xs"
-                    style={{ color: theme.textSecondary }}
-                  >
-                    {chat.preview}
-                  </span>
-                </button>
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               ))
             )}
           </div>

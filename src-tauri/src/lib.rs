@@ -1,9 +1,10 @@
 use crate::parking_lot::Mutex;
 use parking_lot;
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::Pool;
 use sqlx::Sqlite;
 use std::error::Error as StdError;
+use std::str::FromStr;
 use std::sync::Arc;
 use tauri::Manager;
 type Db = Pool<Sqlite>;
@@ -25,15 +26,15 @@ async fn setup_db(data_dir: &std::path::Path) -> Result<Db, Box<dyn StdError>> {
     println!("Database path: {}", db_path.display());
     println!("Database URL: {}", db_url);
 
+    // Create connection options with foreign keys enabled
+    let conn_opts = SqliteConnectOptions::from_str(&db_url)?
+        .foreign_keys(true)
+        .create_if_missing(true);
+
     // Create connection pool
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
-        .connect(&db_url)
-        .await?;
-
-    // Enable foreign keys
-    sqlx::query!("PRAGMA foreign_keys = ON;")
-        .execute(&pool)
+        .connect_with(conn_opts)
         .await?;
 
     println!("Database connection pool created");
@@ -91,6 +92,7 @@ pub fn run() {
             chat::clear_chat_history,
             chat::get_conversations,
             chat::load_conversation_messages,
+            chat::delete_conversation,
             config::get_config,
             config::update_config,
             config::update_provider_settings,

@@ -89,14 +89,33 @@ fn db_error(e: sqlx::Error) -> ErrorResponse {
 /// Gets the latest conversation ID or creates a new one if none exists.
 /// Caches the result in AppState.
 async fn get_or_create_conversation_cached(app_state: &AppState) -> Result<i64, ErrorResponse> {
-    {
+    let db = &app_state.db;
+
+    // First check if the cached conversation still exists
+    let cached_id = {
         let guard = app_state.conversation_id.lock();
-        if let Some(cid) = *guard {
-            return Ok(cid);
+        *guard
+    };
+
+    if let Some(cid) = cached_id {
+        // Verify the conversation exists
+        if let Some(row) =
+            sqlx::query!(r#"SELECT id as "id!" FROM conversations WHERE id = ?"#, cid)
+                .fetch_optional(db)
+                .await
+                .map_err(db_error)?
+        {
+            return Ok(row.id);
+        }
+        // If we get here, the cached conversation doesn't exist anymore
+        // Clear the cache
+        {
+            let mut guard = app_state.conversation_id.lock();
+            *guard = None;
         }
     }
 
-    let db = &app_state.db;
+    // Try to get the latest conversation
     if let Some(row) =
         sqlx::query!(r#"SELECT id as "id!" FROM conversations ORDER BY updated_at DESC LIMIT 1"#)
             .fetch_optional(db)
@@ -360,11 +379,12 @@ pub async fn get_chat_history(
 pub async fn clear_chat_history(
     app_handle: AppHandle,
     chat_history: State<'_, ChatHistory>,
-) -> Result<(), ErrorResponse> {
+) -> Result<i64, ErrorResponse> {
+    // Changed return type to return the new ID
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
-    // Create a new conversation instead of deleting old data
+    // Create a new conversation
     sqlx::query!(
         r#"
         INSERT INTO conversations (created_at, updated_at)
@@ -375,13 +395,14 @@ pub async fn clear_chat_history(
     .await
     .map_err(db_error)?;
 
-    // Update cached conversation_id
+    // Get the new conversation ID
     let new_id: i64 = sqlx::query_scalar!("SELECT last_insert_rowid()")
         .fetch_one(db)
         .await
         .map_err(db_error)?
         .into();
 
+    // Update cached conversation_id
     {
         let mut cid_guard = app_state.conversation_id.lock();
         *cid_guard = Some(new_id);
@@ -390,7 +411,7 @@ pub async fn clear_chat_history(
     // Clear in-memory history
     chat_history.0.lock().clear();
 
-    Ok(())
+    Ok(new_id) // Return the new ID
 }
 
 #[tauri::command]
@@ -507,4 +528,37 @@ pub async fn load_conversation_messages(
     }
 
     Ok(messages)
+}
+
+#[tauri::command]
+pub async fn delete_conversation(
+    conversation_id: i64,
+    app_handle: AppHandle,
+    chat_history: State<'_, ChatHistory>,
+) -> Result<(), ErrorResponse> {
+    let app_state = app_handle.state::<AppState>();
+    let db = &app_state.db;
+
+    // Delete the conversation and its messages (messages will be cascade deleted)
+    sqlx::query!(
+        r#"
+        DELETE FROM conversations
+        WHERE id = ?
+        "#,
+        conversation_id
+    )
+    .execute(db)
+    .await
+    .map_err(db_error)?;
+
+    // If this was the current conversation, clear it
+    {
+        let mut guard = app_state.conversation_id.lock();
+        if guard.map_or(false, |id| id == conversation_id) {
+            *guard = None;
+            chat_history.0.lock().clear();
+        }
+    }
+
+    Ok(())
 }
