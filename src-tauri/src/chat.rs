@@ -4,7 +4,6 @@ use crate::apimodels::{
 use crate::config::ConfigState;
 use crate::AppState;
 use chrono::{DateTime, Local};
-use parking_lot;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{Sqlite, Transaction};

@@ -171,151 +171,156 @@ function AppSidebar({ setActiveContent, ...props }: AppSidebarProps) {
   };
 
   return (
-    <Sidebar
-      collapsible="icon"
-      className="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row"
-      {...props}
-    >
       <Sidebar
-        collapsible="none"
-        className="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r"
-        style={{
-          backgroundColor: theme.surface,
-          borderColor: theme.border,
-        }}
+          collapsible="icon"
+          className="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row"
       >
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarTrigger>
-                <SidebarMenuButton size="lg" className="md:h-8 md:p-0">
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                    <Command className="size-4" />
-                  </div>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">ChatArchive</span>
-                    <span className="truncate text-xs">Personal</span>
-                  </div>
-                </SidebarMenuButton>
-              </SidebarTrigger>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarNavigation
-            setActiveContent={setActiveContent}
-            setOpen={setOpen}
-          />
-        </SidebarContent>
-        <SidebarFooter>
-          <NavUser user={data.user} />
-        </SidebarFooter>
-      </Sidebar>
-
-      <Sidebar
-        collapsible="none"
-        className="hidden flex-1 md:flex"
-        style={{
-          backgroundColor: theme.surface,
-          borderColor: theme.border,
-        }}
-      >
-        <SidebarHeader
-          className="gap-3.5 border-b p-4"
-          style={{ borderColor: theme.border }}
+        <Sidebar
+            collapsible="none"
+            className="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r"
+            style={{
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+            }}
         >
-          <div className="flex w-full items-center justify-between">
-            <div className="text-base font-medium">Chat History</div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={handleNewChat}
-                className="flex items-center gap-1 text-sm px-2 py-1 rounded hover:bg-sidebar-accent transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                New Chat
-              </button>
-              <Label className="flex items-center gap-2 text-sm">
-                <span>Favorites</span>
-                <Switch className="shadow-none" />
-              </Label>
-              <ThemeToggle />
-            </div>
-          </div>
-          <SidebarInput placeholder="Search conversations..." />
-        </SidebarHeader>
-        <SidebarContent>
-          <div className="px-0">
-            {isLoading ? (
-              <div className="flex justify-center items-center p-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
-              </div>
-            ) : error ? (
-              <div className="p-4 text-red-500 text-sm">{error}</div>
-            ) : conversations.length === 0 ? (
-              <div className="p-4 text-sm text-gray-500">
-                No conversations yet
-              </div>
-            ) : (
-              conversations.map((chat) => (
-                <div
-                  key={chat.id}
-                  className={`w-full text-left flex flex-col items-start gap-2 whitespace-nowrap border-b p-4 text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-                    currentConversationId === chat.id ? "bg-sidebar-accent" : ""
-                  }`}
-                  style={{ borderColor: theme.border }}
+          <SidebarHeader>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarTrigger>
+                  <SidebarMenuButton size="lg" className="md:h-8 md:p-0">
+                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                      <Command className="size-4" />
+                    </div>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-semibold">ChatArchive</span>
+                      <span className="truncate text-xs">Personal</span>
+                    </div>
+                  </SidebarMenuButton>
+                </SidebarTrigger>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarNavigation
+                setActiveContent={setActiveContent}
+                setOpen={setOpen}
+            />
+          </SidebarContent>
+          <SidebarFooter>
+            <NavUser user={data.user} />
+          </SidebarFooter>
+        </Sidebar>
+
+        <Sidebar
+            collapsible="none"
+            className="hidden flex-1 md:flex"
+            style={{
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+            }}
+        >
+          <SidebarHeader
+              className="gap-3.5 border-b p-4"
+              style={{ borderColor: theme.border }}
+          >
+            <div className="flex w-full items-center justify-between">
+              <div className="text-base font-medium">Chat History</div>
+              <div className="flex items-center space-x-2">
+                <button
+                    onClick={handleNewChat}
+                    className="flex items-center gap-1 text-sm px-2 py-1 rounded hover:bg-sidebar-accent transition-colors"
                 >
-                  <button
-                    className="w-full flex flex-col items-start gap-2"
-                    onClick={() => handleChatSelect(chat.id)}
-                  >
-                    <div className="flex w-full items-center gap-2">
-                      <span className="font-medium">
-                        {chat.title || "New Chat"}
+                  <Plus className="h-4 w-4" />
+                  New Chat
+                </button>
+                <Label className="flex items-center gap-2 text-sm">
+                  <span>Favorites</span>
+                  <Switch className="shadow-none" />
+                </Label>
+                <ThemeToggle />
+              </div>
+            </div>
+            <SidebarInput placeholder="Search conversations..." />
+          </SidebarHeader>
+          <SidebarContent>
+            <div className="px-0">
+              {isLoading ? (
+                  <div className="flex justify-center items-center p-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
+                  </div>
+              ) : error ? (
+                  <div className="p-4 text-red-500 text-sm">{error}</div>
+              ) : conversations.length === 0 ? (
+                  <div className="p-4 text-sm text-gray-500">
+                    No conversations yet
+                  </div>
+              ) : (
+                  conversations.map((chat) => (
+                      <div
+                          key={chat.id}
+                          className={`group relative w-full text-left border-b last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                              currentConversationId === chat.id ? "bg-sidebar-accent" : ""
+                          }`}
+                          style={{ borderColor: theme.border }}
+                      >
+                        <div className="w-full p-4">
+                          <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(e, chat.id);
+                              }}
+                              className="absolute right-2 top-4 p-2 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-colors"
+                              title="Delete conversation"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+
+                          <button
+                              className="w-full flex flex-col items-start gap-2 text-left"
+                              onClick={() => handleChatSelect(chat.id)}
+                          >
+                            <div className="flex w-full items-center gap-2">
+                        <span className="font-medium">
+                          {chat.title || "New Chat"}
+                        </span>
+                              <span className="ml-auto text-xs">{chat.timestamp}</span>
+                            </div>
+                            <div
+                                className="flex w-full items-center gap-2 text-xs"
+                                style={{ color: theme.textSecondary }}
+                            >
+                              <span>{chat.model}</span>
+                              <span>•</span>
+                              <span>{chat.messageCount} messages</span>
+                            </div>
+                            <span
+                                className="line-clamp-2 w-[260px] whitespace-break-spaces text-xs"
+                                style={{ color: theme.textSecondary }}
+                            >
+                        {chat.preview}
                       </span>
-                      <span className="ml-auto text-xs">{chat.timestamp}</span>
-                    </div>
-                    <div
-                      className="flex w-full items-center gap-2 text-xs"
-                      style={{ color: theme.textSecondary }}
-                    >
-                      <span>{chat.model}</span>
-                      <span>•</span>
-                      <span>{chat.messageCount} messages</span>
-                    </div>
-                    <span
-                      className="line-clamp-2 w-[260px] whitespace-break-spaces text-xs"
-                      style={{ color: theme.textSecondary }}
-                    >
-                      {chat.preview}
-                    </span>
-                  </button>
-                  <button
-                    onClick={(e) => handleDelete(e, chat.id)}
-                    className="absolute right-2 top-2 p-2 hover:text-red-500 transition-colors"
-                    title="Delete conversation"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </SidebarContent>
+                          </button>
+                        </div>
+                      </div>
+                  ))
+              )}
+            </div>
+          </SidebarContent>
+        </Sidebar>
       </Sidebar>
-    </Sidebar>
   );
-}
+};
 
 function NavUser({
-  user,
-}: {
+                   user,
+                 }: {
   user: {
     name: string;
     email: string;
     avatar: string;
   };
 }) {
-  const { isMobile } = useSidebar();
+  const {isMobile } = useSidebar();
   const { theme } = useZustandTheme();
 
   return (

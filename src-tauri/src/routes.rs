@@ -1,6 +1,5 @@
+use anyhow::{Error, Result};
 use std::collections::HashMap;
-use anyhow::{Error,Result};
-
 
 #[tauri::command]
 pub async fn run_code(id: String, code: String) -> Result<String, String> {
@@ -13,19 +12,24 @@ pub async fn run_code(id: String, code: String) -> Result<String, String> {
         ))
         .json(&HashMap::from([("code", code)]))
         .send()
-        .await.map_err(|e| format!("Failed to send request: {}", e))?
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?
         .text()
-        .await.map_err(|e| format!("Failed to send request: {}", e))?;
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
 
     // Deserialize the response
-    let response: serde_json::Value = serde_json::from_str(&response).expect("Failed to parse JSON");
+    let response: serde_json::Value =
+        serde_json::from_str(&response).expect("Failed to parse JSON");
     let msg_id = response["msg_id"].as_str().unwrap();
-    
+
     println!("Execution {} submitted, run\n", response["msg_id"]);
     println!("runt get-results {}", response["msg_id"]);
     println!("\nto get the results of the execution.");
-    
-    let exec = execution(String::from(msg_id)).await.map_err(|e| format!("Failed to get execution: {}", e))?;
+
+    let exec = execution(String::from(msg_id))
+        .await
+        .map_err(|e| format!("Failed to get execution: {}", e))?;
     println!("the exec was {:?}", exec);
     Ok(exec)
 }
@@ -93,16 +97,16 @@ pub async fn execution(id: String) -> Result<String, Error> {
     let res = serde_json::to_string(&response)?;
     print!("{:#?}", res);
     return Ok(serde_json::to_string(&response)?);
-    
+
     // let mut builder = Builder::default();
-    // 
+    //
     // builder.push_record(vec!["Execution Results"]);
     // builder.push_record(vec![format!("Execution ID: {}", id)]);
     // builder.push_record(vec![format!("Status: {}", status)]);
     // builder.push_record(vec![format!("Started: {}", start_time)]);
     // builder.push_record(vec![format!("Finished: {}", end_time)]);
     // builder.push_record(vec![""]);
-    // 
+    //
     // // Code "block"
     // builder.push_record(vec!["-- Code --"]);
     // builder.push_record(vec![code.unwrap_or("").to_string()]);
@@ -112,9 +116,9 @@ pub async fn execution(id: String) -> Result<String, Error> {
     //     builder.push_record(vec![result.to_string()]);
     // }
     // builder.push_record(vec![""]);
-    // 
+    //
     // let table = builder.build().with(Style::rounded()).to_string();
-    // 
+    //
     // println!("{}", table);
 
     // Ok(())
