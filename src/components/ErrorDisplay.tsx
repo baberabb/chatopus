@@ -1,6 +1,6 @@
 import React from "react";
 import { AlertCircle, RotateCcw } from "lucide-react";
-import { useZustandTheme } from "../store";
+import { useZustandTheme } from "@/store";
 
 interface ErrorDisplayProps {
   message: string;

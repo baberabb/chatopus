@@ -8,7 +8,7 @@ import {
   Trash2,
   Plus,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,8 +17,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { Label } from "./ui/label";
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
 import {
   Sidebar,
   SidebarContent,
@@ -32,16 +32,16 @@ import {
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
-} from "./ui/sidebar";
-import { Switch } from "./ui/switch";
-import { ChatContainer } from "./ChatContainer";
-import { SidebarNavigation } from "./SidebarNavigation";
-import { TrashContent } from "./TrashContent";
-import Settings from "./Settings";
-import { ModelSettings } from "./ModelSettings";
-import { ThemeToggle } from "./ThemeToggle";
+} from "@/components/ui/sidebar";
+import { Switch } from "@/components/ui/switch";
+import { ChatContainer } from "@/components/chat/ChatContainer";
+import { SidebarNavigation } from "@/components/SidebarNavigation";
+import { TrashContent } from "@/components/TrashContent";
+import Settings from "@/components/Settings";
+import { ModelSettings } from "@/components/ModelSettings";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
-import { useZustandTheme, useChatStore } from "../store";
+import { useZustandTheme, useChatStore } from "@/store.ts";
 import { invoke } from "@tauri-apps/api/core";
 
 const data = {

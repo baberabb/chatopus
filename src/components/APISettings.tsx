@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Switch } from "./ui/switch";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 // import {
 //   Select,
 //   SelectContent,
@@ -18,7 +18,7 @@ import {
   CardDescription,
   CardContent,
   // CardFooter,
-} from "./ui/card";
+} from "@/components/ui/card";
 // import { Textarea } from "./ui/textarea";
 // import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 // import {
