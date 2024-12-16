@@ -3,7 +3,7 @@ import {Play} from "lucide-react";
 import {invoke} from "@tauri-apps/api/core";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import {darcula} from "react-syntax-highlighter/dist/esm/styles/hljs";
-import {useZustandTheme} from "../../store";
+import {useZustandTheme} from "@/store.ts";
 import {CopyButton} from "./CopyButton";
 
 interface CodeBlockProps {

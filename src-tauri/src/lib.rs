@@ -1,5 +1,3 @@
-use crate::parking_lot::Mutex;
-use parking_lot;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::Pool;
 use sqlx::Sqlite;
@@ -162,7 +160,7 @@ pub fn run() {
             )));
             app.manage(AppState {
                 db,
-                conversation_id: Mutex::new(None),
+                conversation_id: parking_lot::Mutex::new(None),
             });
             // TODO: move kernel init to seperate command
             // TODO: Add option to start new kernel/from connection file
