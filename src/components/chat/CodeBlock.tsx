@@ -16,8 +16,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
   const executeCode = async (code: string) => {
-        const msgId = await invoke('execute_code', { code });
-        return msgId;
+      return await invoke('execute_code', {code});
     };
 
     const getMessage = async () => {

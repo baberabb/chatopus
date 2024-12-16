@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { ThumbsUp, Copy } from "lucide-react";
-import { useZustandTheme } from "../../store";
+import { useZustandTheme } from "@/store.ts";
 import { Message } from "./types";
 import { UserAvatar } from "./UserAvatar";
 import { MessageContent } from "./MessageContent";

@@ -67,7 +67,7 @@ export const ModelProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
-    loadSavedModels();
+    void loadSavedModels();
   }, []);
 
   return (

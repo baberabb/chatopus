@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
-import { useZustandTheme } from "../../store";
+import { useZustandTheme } from "@/store.ts";
 import { Message } from "./types";
 import { CodeBlock } from "./CodeBlock";
 

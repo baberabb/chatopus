@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import { Paperclip, Zap, CornerRightUp } from "lucide-react";
-import { useZustandTheme } from "../../store";
+import { useZustandTheme } from "@/store.ts";
 import { useModel } from "../../contexts/ModelContext";
 import ErrorBoundary from "../ErrorBoundary";
 import { ErrorDisplay } from "../ErrorDisplay";
