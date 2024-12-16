@@ -6,6 +6,7 @@ import tsParser from '@typescript-eslint/parser';
 
 export default [
   {
+    ignores: ['dist/**', 'target/**'],
     files: ['**/*.{js,jsx,ts,tsx}'],
     plugins: {
       react: reactPlugin,
