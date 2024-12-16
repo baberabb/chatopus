@@ -1,10 +1,10 @@
-import React, { useState } from "react";
-import { Play } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
+import React, {useState} from "react";
+import {Play} from "lucide-react";
+import {invoke} from "@tauri-apps/api/core";
 import SyntaxHighlighter from "react-syntax-highlighter";
-import { darcula } from "react-syntax-highlighter/dist/esm/styles/hljs";
-import { useZustandTheme } from "../../store";
-import { CopyButton } from "./CopyButton";
+import {darcula} from "react-syntax-highlighter/dist/esm/styles/hljs";
+import {useZustandTheme} from "../../store";
+import {CopyButton} from "./CopyButton";
 
 interface CodeBlockProps {
   language: string;
@@ -15,13 +15,22 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
   const { theme } = useZustandTheme();
   const [isRunning, setIsRunning] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
+  const executeCode = async (code: string) => {
+        const msgId = await invoke('execute_code', { code });
+        return msgId;
+    };
 
+    const getMessage = async () => {
+      return await invoke('receive_message');
+    };
   const runCode = async () => {
     setIsRunning(true);
     setOutput(null);
     try {
-      const result = await invoke("run_code", { code: value });
-      setOutput(result as string);
+      await executeCode(value);
+      const response = await getMessage();
+      console.log(JSON.stringify(response, null, 2));
+      setOutput(JSON.stringify(response, null, 2) as string);
     } catch (error) {
       console.error("Error running code:", error);
       setOutput(`Error: ${error}`);

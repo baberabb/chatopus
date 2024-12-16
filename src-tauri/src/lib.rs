@@ -7,6 +7,8 @@ use std::error::Error as StdError;
 use std::str::FromStr;
 use std::sync::Arc;
 use tauri::Manager;
+use tokio::sync::OnceCell;
+
 type Db = Pool<Sqlite>;
 
 mod apimodels;
@@ -16,6 +18,38 @@ mod daemon;
 mod routes;
 mod jupyter;
 
+use tauri::State;
+use crate::jupyter::{JupyterClient, JupyterClientMessage};
+
+// Global static to hold our initialized client
+static JUPYTER_CLIENT: OnceCell<Arc<JupyterClient>> = OnceCell::const_new();
+
+struct JupState {
+    client: Arc<OnceCell<JupyterClient>>,
+}
+
+#[tauri::command]
+async fn execute_code(
+    state: State<'_, JupState>,
+    code: String,
+) -> Result<String, String> {
+    let client = state.client.get()
+        .ok_or("Client not initialized")?;
+    client.execute_code(code)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn receive_message(
+    state: State<'_, JupState>,
+) -> Result<Option<JupyterClientMessage>, String> {
+    let client = state.client.get()
+        .ok_or("Client not initialized")?;
+    let res = client.receive_message().await;
+    println!("The result is {:#?}", &res);
+    Ok(res)
+}
 
 async fn setup_db(data_dir: &std::path::Path) -> Result<Db, Box<dyn StdError>> {
     // Ensure data directory exists
@@ -74,6 +108,10 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let client = Arc::new(OnceCell::new());
+    // Clone the Arc for use in our setup function
+    let client_clone = client.clone();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(
@@ -99,6 +137,8 @@ pub fn run() {
             config::update_config,
             config::update_provider_settings,
             config::set_active_provider,
+            execute_code,
+            receive_message,
         ])
         .setup(|app| {
             // Get data directory using app directly
@@ -123,6 +163,21 @@ pub fn run() {
             app.manage(AppState {
                 db,
                 conversation_id: Mutex::new(None),
+            });
+            // TODO: move kernel init to seperate command
+            // TODO: Add option to start new kernel/from connection file
+            app.manage(JupState {client});
+            tauri::async_runtime::spawn(async move {
+                match JupyterClient::new("/Users/baber/Library/Jupyter/runtime/kernel-b52bf983-a859-4606-b059-91bc2ab9bd18.json".into()).await {
+                    Ok(jupyter_client) => {
+                        if let Err(e) = client_clone.set(jupyter_client) {
+                            eprintln!("Failed to set client: {:?}", e);
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("Failed to initialize client: {:?}", e);
+                    }
+                }
             });
 
             Ok(())
