@@ -116,3 +116,6 @@
     @apply bg-background text-foreground;
   }
 }
+.prose pre {
+  padding: 0 !important;
+}
