@@ -40,12 +40,14 @@ async fn execute_code(
 
 #[tauri::command]
 async fn receive_message(
+    msgid: String,
     state: State<'_, JupState>,
-) -> Result<Option<JupyterClientMessage>, String> {
+) -> Result<String, String> {
+    println!("{}", msgid);
     let client = state.client.get()
         .ok_or("Client not initialized")?;
-    let res = client.receive_message().await;
-    println!("The result is {:#?}", &res);
+    let res = client.receive_execution_result(&msgid).await.unwrap();
+    // println!("The result is {:#?}", &res);
     Ok(res)
 }
 
@@ -166,7 +168,7 @@ pub fn run() {
             // TODO: Add option to start new kernel/from connection file
             app.manage(JupState {client});
             tauri::async_runtime::spawn(async move {
-                match JupyterClient::new("/Users/baber/Library/Jupyter/runtime/kernel-b52bf983-a859-4606-b059-91bc2ab9bd18.json".into()).await {
+                match JupyterClient::new("/Users/baber/Library/Jupyter/runtime/kernel-2240.json".into()).await {
                     Ok(jupyter_client) => {
                         if let Err(e) = client_clone.set(jupyter_client) {
                             eprintln!("Failed to set client: {:?}", e);

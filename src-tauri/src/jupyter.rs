@@ -208,8 +208,10 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 use tokio::sync::{mpsc, Mutex};
 use std::sync::Arc;
+use serde_json::to_string;
 
-use jupyter_protocol::{Channel, ConnectionInfo, ExecuteRequest, Header, JupyterMessage, JupyterMessageContent};
+
+use jupyter_protocol::{Channel, ConnectionInfo, ExecuteRequest, ExecutionState, Header, JupyterMessage, JupyterMessageContent, Media, MediaType};
 
 #[derive(Serialize, Deserialize)]
 #[derive(Debug)]
@@ -322,7 +324,7 @@ impl JupyterClient {
         let iopub_tx = iopub_tx.clone();
         tokio::spawn(async move {
             while let Ok(message) = iopub.read().await {
-                debug!("Received message from iopub: {:?}", message);
+                // debug!("Received message from iopub: {:?}", message);
                 if let Err(e) = iopub_tx.send(message).await {
                     error!("Failed to forward IOPub message: {}", e);
                     break;
@@ -375,5 +377,69 @@ impl JupyterClient {
     pub async fn receive_message(&self) -> Option<JupyterClientMessage> {
         let mut rx = self.iopub_rx.lock().await;
         rx.recv().await.map(Into::into)
+    }
+
+    fn extract_media_content(media: &Media) -> Option<String> {
+        // Define a ranker function that prioritizes different media types
+        let ranker = |media_type: &MediaType| match media_type {
+            MediaType::Html(_) => 3,
+            MediaType::Plain(_) => 2,
+            MediaType::Json(_) => 1,
+            _ => 0,
+        };
+
+        // Get the richest media type
+        media.richest(ranker).and_then(|media_type| {
+            match media_type {
+                MediaType::Plain(text) => Some(text.clone()),
+                MediaType::Html(html) => Some(html.clone()),
+                MediaType::Json(json) => to_string(&json).ok(),
+                _ => None,
+            }
+        })
+    }
+    pub async fn receive_execution_result(&self, msg_id: &str) -> Result<String> {
+        let mut output = String::new();
+        let mut rx = self.iopub_rx.lock().await;
+
+        let mut execution_completed = false;
+
+        while !execution_completed {
+            if let Some(msg) = rx.recv().await {
+                // Only process messages related to our execution request
+                if msg.parent_header.as_ref().map(|h| h.msg_id.as_str()) == Some(msg_id) {
+                    match msg.content {
+                        JupyterMessageContent::StreamContent(stream) => {
+                            output.push_str(&stream.text);
+                        }
+                        JupyterMessageContent::ExecuteResult(result) => {
+                            if let Some(content) = Self::extract_media_content(&result.data) {
+                                output.push_str(&content);
+                            }
+                        }
+                        JupyterMessageContent::ErrorOutput(error) => {
+                            output.push_str(&format!("Error: {}\n{}",
+                                                     error.ename,
+                                                     error.traceback.join("\n")));
+                        }
+                        JupyterMessageContent::DisplayData(display_data) => {
+                            if let Some(content) = Self::extract_media_content(&display_data.data) {
+                                output.push_str(&content);
+                            }
+                        }
+                        JupyterMessageContent::Status(status) => {
+                            if matches!(status.execution_state, ExecutionState::Idle) {
+                                execution_completed = true;
+                            }
+                        }
+                        _ => {} // Ignore other message types
+                    }
+                }
+            } else {
+                break; // Channel closed
+            }
+        }
+
+        Ok(output)
     }
 }
