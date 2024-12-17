@@ -5,7 +5,6 @@ import SyntaxHighlighter from "react-syntax-highlighter";
 import {darcula} from "react-syntax-highlighter/dist/esm/styles/hljs";
 import {useZustandTheme} from "@/store.ts";
 import {CopyButton} from "./CopyButton";
-
 interface CodeBlockProps {
   language: string;
   value: string;
@@ -15,21 +14,20 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, value }) => {
   const { theme } = useZustandTheme();
   const [isRunning, setIsRunning] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
-  const executeCode = async (code: string) => {
-      return await invoke('execute_code', {code});
+    const executeCode = async (code: string): Promise<string> => {
+        return await invoke<string>('execute_code', { code });
     };
 
-    const getMessage = async () => {
-      return await invoke('receive_message');
+    const getMessage = async (msgid: string): Promise<string> => {
+      return await invoke('receive_message', {msgid: msgid});
     };
   const runCode = async () => {
     setIsRunning(true);
     setOutput(null);
     try {
-      await executeCode(value);
-      const response = await getMessage();
-      console.log(JSON.stringify(response, null, 2));
-      setOutput(JSON.stringify(response, null, 2) as string);
+      let msgid = await executeCode(value);
+      const response: string = await getMessage(msgid);
+      setOutput(response);
     } catch (error) {
       console.error("Error running code:", error);
       setOutput(`Error: ${error}`);
