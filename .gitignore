@@ -28,3 +28,6 @@ target 3
 dist
 node_modules
 src-tauri/chatopus.db
+
+# Million Lint
+.million
