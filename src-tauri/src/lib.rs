@@ -13,11 +13,12 @@ mod apimodels;
 mod chat;
 mod config;
 mod daemon;
-mod routes;
+mod database;
 mod jupyter;
+mod routes;
 
-use tauri::State;
 use crate::jupyter::{JupyterClient, JupyterClientMessage};
+use tauri::State;
 
 // Global static to hold our initialized client
 static JUPYTER_CLIENT: OnceCell<Arc<JupyterClient>> = OnceCell::const_new();
@@ -27,25 +28,15 @@ struct JupState {
 }
 
 #[tauri::command]
-async fn execute_code(
-    state: State<'_, JupState>,
-    code: String,
-) -> Result<String, String> {
-    let client = state.client.get()
-        .ok_or("Client not initialized")?;
-    client.execute_code(code)
-        .await
-        .map_err(|e| e.to_string())
+async fn execute_code(state: State<'_, JupState>, code: String) -> Result<String, String> {
+    let client = state.client.get().ok_or("Client not initialized")?;
+    client.execute_code(code).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn receive_message(
-    msgid: String,
-    state: State<'_, JupState>,
-) -> Result<String, String> {
+async fn receive_message(msgid: String, state: State<'_, JupState>) -> Result<String, String> {
     println!("{}", msgid);
-    let client = state.client.get()
-        .ok_or("Client not initialized")?;
+    let client = state.client.get().ok_or("Client not initialized")?;
     let res = client.receive_execution_result(&msgid).await.unwrap();
     // println!("The result is {:#?}", &res);
     Ok(res)
@@ -166,14 +157,18 @@ pub fn run() {
             });
             // TODO: move kernel init to seperate command
             // TODO: Add option to start new kernel/from connection file
-            app.manage(JupState {client});
+            app.manage(JupState { client });
             tauri::async_runtime::spawn(async move {
-                match JupyterClient::new("/Users/baber/Library/Jupyter/runtime/kernel-2240.json".into()).await {
+                match JupyterClient::new(
+                    "/Users/baber/Library/Jupyter/runtime/kernel-2240.json".into(),
+                )
+                .await
+                {
                     Ok(jupyter_client) => {
                         if let Err(e) = client_clone.set(jupyter_client) {
                             eprintln!("Failed to set client: {:?}", e);
                         }
-                    },
+                    }
                     Err(e) => {
                         eprintln!("Failed to initialize client: {:?}", e);
                     }
