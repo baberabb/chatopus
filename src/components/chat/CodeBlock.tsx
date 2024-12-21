@@ -22,8 +22,8 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   const [output, setOutput] = useState<string | null>(null);
   const [code, setCode] = useState(initialValue);
 
-  // Use initialValue directly when not editing
-  const displayCode = isEditing ? code : initialValue;
+  // Always use the code state which contains any edits
+  const displayCode = code;
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const adjustTextareaHeight = () => {
