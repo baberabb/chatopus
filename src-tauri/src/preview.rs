@@ -2,6 +2,7 @@ use std::fs;
 use tauri::Url;
 use tauri::WebviewWindowBuilder;
 use tauri::{Manager, WebviewUrl};
+use tauri::ipc::RuntimeCapability;
 
 #[tauri::command]
 pub async fn create_preview(
@@ -28,9 +29,9 @@ pub async fn create_preview(
     let file_url = format!("file://{}", file_path.to_str().unwrap());
     WebviewWindowBuilder::new(
         &app_handle,
-        "label",
+        "gen_html",
         WebviewUrl::CustomProtocol(Url::parse(&file_url).map_err(|e| e.to_string())?),
-    )
+    ).title("testing, testing...1, 2, 3")
     .build()
     .unwrap();
     Ok(())
