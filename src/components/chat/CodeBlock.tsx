@@ -40,20 +40,30 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
     }
   }, [isEditing, code]);
 
-  const executeCode = async (code: string): Promise<string> => {
-    return await invoke<string>("execute_code", { code });
-  };
-
-  const getMessage = async (msgid: string): Promise<string> => {
-    return await invoke("receive_message", { msgid: msgid });
+  const executeCode = async (code: string, lang: string): Promise<string> => {
+    switch (lang.toLowerCase()) {
+      case "python": {
+        const msgid = await invoke<string>("execute_code", { code });
+        return await invoke("receive_message", { msgid });
+      }
+      case "javascript":
+        return "JavaScript execution not implemented yet";
+      case "html":
+        return "HTML execution not implemented yet";
+      case "css":
+        return "CSS execution not implemented yet";
+      case "rust":
+        return "Rust execution not implemented yet";
+      default:
+        return `Language ${lang} is not supported yet`;
+    }
   };
 
   const runCode = async () => {
     setIsRunning(true);
     setOutput(null);
     try {
-      let msgid = await executeCode(code);
-      const response: string = await getMessage(msgid);
+      const response = await executeCode(code, language);
       setOutput(response);
     } catch (error) {
       console.error("Error running code:", error);
@@ -114,8 +124,15 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
         <div className="flex items-center gap-3 ml-auto">
           <button
             onClick={runCode}
-            className="p-1.5 rounded hover:bg-opacity-75 transition-colors flex items-center gap-1"
+            className={`p-1.5 rounded hover:bg-opacity-75 transition-colors flex items-center gap-1 ${
+              language.toLowerCase() !== "python" ? "opacity-50" : ""
+            }`}
             style={{ backgroundColor: "rgba(255, 255, 255, 0.1)" }}
+            title={
+              language.toLowerCase() !== "python"
+                ? "Code execution is only implemented for Python"
+                : "Run code"
+            }
           >
             <Play
               size={14}
