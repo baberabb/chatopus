@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from "react";
-import { Paperclip, Zap, CornerRightUp } from "lucide-react";
-import { useZustandTheme } from "@/store.ts";
+import { Paperclip, Zap, CornerRightUp, Server } from "lucide-react";
+import { useZustandTheme } from "../../store";
 import { useModel } from "../../contexts/ModelContext";
 import ErrorBoundary from "../ErrorBoundary";
 import { ErrorDisplay } from "../ErrorDisplay";
@@ -74,9 +74,22 @@ export function ChatContainer() {
             borderBottom: `1px solid ${theme.border}`,
           }}
         >
-          <span className="text-sm font-medium" style={{ color: theme.text }}>
-            {currentModel?.name || "No model selected"}
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium" style={{ color: theme.text }}>
+              {currentModel?.name || "No model selected"}
+            </span>
+            <button
+              onClick={() => {
+                console.log("Connect to Jupyter server - placeholder");
+                // TODO: Implement Jupyter server connection
+              }}
+              className="flex items-center gap-1 px-2 py-1 text-sm rounded hover:bg-opacity-10 hover:bg-white transition-colors"
+              style={{ color: theme.text }}
+            >
+              <Server size={16} />
+              <span>Connect Jupyter</span>
+            </button>
+          </div>
         </div>
 
         {/* Message list */}
