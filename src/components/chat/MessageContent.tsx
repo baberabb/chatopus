@@ -40,12 +40,17 @@ export const MessageContent: React.FC<MessageContentProps> = ({
               const match = /language-(\w+)/.exec(className || "");
               const inline = !match;
               return !inline ? (
-                <CodeBlock language={match[1]} value={String(children)} />
+                <CodeBlock
+                  language={match[1]}
+                  value={String(children)}
+                  isStreaming={isStreaming && message.role === "assistant"}
+                />
               ) : (
                 <code
                   className={`${className} bg-slate-100 dark:bg-slate-800 rounded px-1 py-0.5`}
                   {...props}
                 >
+                  {/* @ts-ignore */}
                   {children}
                 </code>
               );

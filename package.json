@@ -72,6 +72,7 @@
     "@typescript-eslint/parser": "^8.18.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "babel-plugin-react-compiler": "19.0.0-beta-201e55d-20241215",
     "daisyui": "^4.12.14",
     "eslint": "^9.17.0",
     "eslint-plugin-react": "^7.37.2",
@@ -81,6 +82,7 @@
     "postcss-preset-mantine": "^1.17.0",
     "postcss-simple-vars": "^7.0.1",
     "prettier": "3.3.3",
+    "react-compiler-runtime": "19.0.0-beta-201e55d-20241215",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.7.2",
     "vite": "^5.4.11"
