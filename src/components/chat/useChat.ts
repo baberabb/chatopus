@@ -17,7 +17,6 @@ export function useChat() {
     clearMessages
   } = useChatStore();
   
-  const [input, setInput] = useState("");
   const [streamBuffer, setStreamBuffer] = useState("");
   const [error, setError] = useState<{
     message: string;
@@ -191,8 +190,6 @@ export function useChat() {
   return {
     messages,
     currentConversationId,
-    input,
-    setInput,
     isStreaming,
     isLoading,
     error,
