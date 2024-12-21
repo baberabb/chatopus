@@ -104,6 +104,7 @@ pub fn run() {
     let client_clone = client.clone();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(
             tauri_plugin_log::Builder::new()

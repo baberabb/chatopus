@@ -8,9 +8,9 @@
 // use std::collections::HashMap;
 // use chrono;
 // use tokio::sync::mpsc;
-// 
+//
 // use jupyter_protocol::{Channel, ConnectionInfo, ExecuteRequest, Header, JupyterMessage, JupyterMessageContent};
-// 
+//
 // #[derive(Serialize, Deserialize)]
 // struct JupyterClientMessage {
 //     header: Header,
@@ -24,7 +24,7 @@
 //     buffers: Vec<Bytes>,
 //     channel: Option<Channel>,
 // }
-// 
+//
 // impl From<JupyterMessage> for JupyterClientMessage {
 //     fn from(msg: JupyterMessage) -> Self {
 //         JupyterClientMessage {
@@ -37,7 +37,7 @@
 //         }
 //     }
 // }
-// 
+//
 // impl From<JupyterClientMessage> for JupyterMessage {
 //     fn from(msg: JupyterClientMessage) -> Self {
 //         JupyterMessage {
@@ -51,7 +51,7 @@
 //         }
 //     }
 // }
-// 
+//
 // // Custom serializer for Base64 encoding for buffers
 // fn serialize_base64<S>(data: &[Bytes], serializer: S) -> Result<S::Ok, S::Error>
 // where
@@ -62,7 +62,7 @@
 //         .collect::<Vec<_>>()
 //         .serialize(serializer)
 // }
-// 
+//
 // fn deserialize_base64<'de, D>(deserializer: D) -> Result<Vec<Bytes>, D::Error>
 // where
 //     D: serde::Deserializer<'de>,
@@ -78,34 +78,34 @@
 //         })
 //         .collect()
 // }
-// 
+//
 // pub struct JupyterClient {
 //     iopub_rx: mpsc::Receiver<JupyterMessage>,
 //     shell_tx: mpsc::Sender<JupyterMessage>,
 //     session_id: String,
 // }
-// 
+//
 // impl JupyterClient {
 //     pub async fn new(connection_file_path: PathBuf) -> Result<Self> {
 //         let content = tokio::fs::read_to_string(&connection_file_path).await?;
 //         let connection_info = serde_json::from_str::<ConnectionInfo>(&content)?;
-// 
+//
 //         let session_id = format!("client-{}", uuid::Uuid::new_v4());
-// 
+//
 //         let mut iopub = runtimelib::create_client_iopub_connection(
 //             &connection_info,
 //             "",
 //             &session_id,
 //         ).await?;
-// 
+//
 //         let mut shell = runtimelib::create_client_shell_connection(
 //             &connection_info,
 //             &session_id
 //         ).await?;
-// 
+//
 //         let (shell_tx, mut shell_rx) = mpsc::channel::<JupyterMessage>(100);
 //         let (iopub_tx, iopub_rx) = mpsc::channel::<JupyterMessage>(100);
-// 
+//
 //         // Handle shell messages
 //         tokio::spawn(async move {
 //             while let Some(message) = shell_rx.recv().await {
@@ -114,7 +114,7 @@
 //                 }
 //             }
 //         });
-// 
+//
 //         // Handle IOPub messages
 //         let iopub_tx = iopub_tx.clone();
 //         tokio::spawn(async move {
@@ -126,17 +126,17 @@
 //                 }
 //             }
 //         });
-// 
+//
 //         Ok(Self {
 //             iopub_rx,
 //             shell_tx,
 //             session_id,
 //         })
 //     }
-// 
+//
 //     pub async fn execute_code(&self, code: String) -> Result<String> {
 //         let msg_id = uuid::Uuid::new_v4().to_string();
-// 
+//
 //         let content = JupyterMessageContent::ExecuteRequest(ExecuteRequest {
 //             code,
 //             silent: false,
@@ -145,7 +145,7 @@
 //             allow_stdin: false,
 //             stop_on_error: true,
 //         });
-// 
+//
 //         let header = Header {
 //             msg_id: msg_id.clone(),
 //             session: self.session_id.clone(),
@@ -154,7 +154,7 @@
 //             msg_type: String::from("execute_request"),
 //             version: String::from("5.3"),
 //         };
-// 
+//
 //         let message = JupyterMessage {
 //             zmq_identities: Vec::new(),
 //             header,
@@ -164,16 +164,16 @@
 //             buffers: Vec::new(),
 //             channel: Some(Channel::Shell),
 //         };
-// 
+//
 //         self.shell_tx.send(message).await?;
 //         Ok(msg_id)
 //     }
-// 
+//
 //     pub async fn receive_message(&mut self) -> Option<JupyterClientMessage> {
 //         self.iopub_rx.recv().await.map(Into::into)
 //     }
 // }
-// 
+//
 // // Example Tauri command
 // #[tauri::command]
 // pub async fn execute_jupyter_code(
@@ -185,11 +185,11 @@
 //         .await
 //         .map_err(|e| e.to_string())
 // }
-// 
+//
 // pub struct JupyterState {
 //     client: tokio::sync::Mutex<JupyterClient>,
 // }
-// 
+//
 // impl JupyterState {
 //     pub async fn new(connection_file: PathBuf) -> Result<Self> {
 //         let client = JupyterClient::new(connection_file).await?;
@@ -203,18 +203,19 @@ use base64::prelude::*;
 use bytes::Bytes;
 use log::{debug, error};
 use serde::{Deserialize, Serialize, Serializer};
-use serde_json::Value;
-use std::path::PathBuf;
-use std::collections::HashMap;
-use tokio::sync::{mpsc, Mutex};
-use std::sync::Arc;
 use serde_json::to_string;
+use serde_json::Value;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::{mpsc, Mutex};
 
+use jupyter_protocol::{
+    Channel, ConnectionInfo, ExecuteRequest, ExecutionState, Header, JupyterMessage,
+    JupyterMessageContent, Media, MediaType,
+};
 
-use jupyter_protocol::{Channel, ConnectionInfo, ExecuteRequest, ExecutionState, Header, JupyterMessage, JupyterMessageContent, Media, MediaType};
-
-#[derive(Serialize, Deserialize)]
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct JupyterClientMessage {
     header: Header,
     parent_header: Option<Header>,
@@ -299,16 +300,11 @@ impl JupyterClient {
 
         let session_id = format!("client-{}", uuid::Uuid::new_v4());
 
-        let mut iopub = runtimelib::create_client_iopub_connection(
-            &connection_info,
-            "",
-            &session_id,
-        ).await?;
+        let mut iopub =
+            runtimelib::create_client_iopub_connection(&connection_info, "", &session_id).await?;
 
-        let mut shell = runtimelib::create_client_shell_connection(
-            &connection_info,
-            &session_id
-        ).await?;
+        let mut shell =
+            runtimelib::create_client_shell_connection(&connection_info, &session_id).await?;
 
         let (shell_tx, mut shell_rx) = mpsc::channel::<JupyterMessage>(100);
         let (iopub_tx, iopub_rx) = mpsc::channel::<JupyterMessage>(100);
@@ -389,14 +385,14 @@ impl JupyterClient {
         };
 
         // Get the richest media type
-        media.richest(ranker).and_then(|media_type| {
-            match media_type {
+        media
+            .richest(ranker)
+            .and_then(|media_type| match media_type {
                 MediaType::Plain(text) => Some(text.clone()),
                 MediaType::Html(html) => Some(html.clone()),
                 MediaType::Json(json) => to_string(&json).ok(),
                 _ => None,
-            }
-        })
+            })
     }
     pub async fn receive_execution_result(&self, msg_id: &str) -> Result<String> {
         let mut output = String::new();
@@ -418,9 +414,11 @@ impl JupyterClient {
                             }
                         }
                         JupyterMessageContent::ErrorOutput(error) => {
-                            output.push_str(&format!("Error: {}\n{}",
-                                                     error.ename,
-                                                     error.traceback.join("\n")));
+                            output.push_str(&format!(
+                                "Error: {}\n{}",
+                                error.ename,
+                                error.traceback.join("\n")
+                            ));
                         }
                         JupyterMessageContent::DisplayData(display_data) => {
                             if let Some(content) = Self::extract_media_content(&display_data.data) {
