@@ -2,19 +2,37 @@ import * as React from "react";
 import { createRoot } from "react-dom/client";
 import { TooltipProvider } from "./components/ui/tooltip";
 import "./globals.css";
-import { useZustandTheme } from "./store";
-import SidebarLayout from "./components/sidebar-09";
+import { useZustandTheme, useModelStore } from "./store";
 import { ModelProvider } from "./contexts/ModelContext";
 
+const SidebarLayout = React.lazy(() => import("./components/sidebar-09"));
+
+const LoadingFallback = () => (
+  <div className="h-screen w-full flex items-center justify-center">
+    <div className="animate-pulse">Loading...</div>
+  </div>
+);
+
 const App = () => {
-  const { theme } = useZustandTheme();
+  const { theme, initialized: themeInitialized } = useZustandTheme();
+  const { initialized: modelInitialized } = useModelStore();
 
   React.useEffect(() => {
-    document.body.style.backgroundColor = theme.background;
-    document.body.style.color = theme.text;
-  }, [theme]);
+    if (themeInitialized) {
+      document.body.style.backgroundColor = theme.background;
+      document.body.style.color = theme.text;
+    }
+  }, [theme, themeInitialized]);
 
-  return <SidebarLayout />;
+  if (!themeInitialized || !modelInitialized) {
+    return <LoadingFallback />;
+  }
+
+  return (
+    <React.Suspense fallback={<LoadingFallback />}>
+      <SidebarLayout />
+    </React.Suspense>
+  );
 };
 
 const rootElement = document.getElementById("root");

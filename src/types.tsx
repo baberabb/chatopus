@@ -1,3 +1,28 @@
+export type ThemeType = "light" | "dark";
+
+export interface Theme {
+  background: string;
+  surface: string;
+  border: string;
+  text: string;
+  textSecondary: string;
+  shadowColor: string;
+}
+
+export interface ProviderSettings {
+  api_key: string;
+  model: string;
+  max_tokens: number;
+  streaming: boolean;
+}
+
+export interface ModelConfig {
+  active_provider: string;
+  providers: {
+    [key: string]: ProviderSettings;
+  };
+}
+
 export interface Reaction {
   thumbsUp: number;
 }

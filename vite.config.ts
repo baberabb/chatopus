@@ -6,7 +6,7 @@ import path from "path";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig({
   plugins: [
     react({
       babel: {
@@ -14,6 +14,24 @@ export default defineConfig(async () => ({
       },
     }),
   ],
+  build: {
+    target: 'esnext',
+    minify: 'terser',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor': ['react', 'react-dom', 'zustand'],
+          'ui': ['./src/components/ui/**/*.tsx'],
+        }
+      }
+    },
+    terserOptions: {
+      compress: {
+        ecma: 2020,
+        passes: 2
+      }
+    }
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
@@ -41,4 +59,4 @@ export default defineConfig(async () => ({
           "@": path.resolve(__dirname, "./src"),
       },
     }
-}));
+});
