@@ -3,7 +3,7 @@ import { Play } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/default-highlight";
 import { vs2015 } from "react-syntax-highlighter/dist/esm/styles/hljs";
-import { useZustandTheme } from "@/store.ts";
+import { useZustandTheme } from "../../store";
 
 interface CodeBlockProps {
   language: string;
@@ -48,8 +48,23 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
       }
       case "javascript":
         return "JavaScript execution not implemented yet";
-      case "html":
-        return "HTML execution not implemented yet";
+      case "html": {
+        try {
+          // Create a new window using Tauri command
+          const label = `html-preview-${Date.now()}`;
+          await invoke("create_preview", {
+            label,
+            content: code,
+            title: "HTML Preview",
+            width: 800,
+            height: 600,
+          });
+          return "HTML opened in new window";
+        } catch (error) {
+          console.error("Failed to open HTML preview:", error);
+          return `Failed to open window: ${error}`;
+        }
+      }
       case "css":
         return "CSS execution not implemented yet";
       case "rust":
@@ -125,13 +140,17 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           <button
             onClick={runCode}
             className={`p-1.5 rounded hover:bg-opacity-75 transition-colors flex items-center gap-1 ${
-              language.toLowerCase() !== "python" ? "opacity-50" : ""
+              !["python", "html"].includes(language.toLowerCase())
+                ? "opacity-50"
+                : ""
             }`}
             style={{ backgroundColor: "rgba(255, 255, 255, 0.1)" }}
             title={
-              language.toLowerCase() !== "python"
-                ? "Code execution is only implemented for Python"
-                : "Run code"
+              language.toLowerCase() === "html"
+                ? "Open HTML in new window"
+                : language.toLowerCase() === "python"
+                  ? "Run code"
+                  : "Code execution is only implemented for Python and HTML"
             }
           >
             <Play

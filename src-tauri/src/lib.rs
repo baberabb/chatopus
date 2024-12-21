@@ -15,6 +15,7 @@ mod config;
 mod daemon;
 mod database;
 mod jupyter;
+mod preview;
 mod routes;
 
 use crate::jupyter::{JupyterClient, JupyterClientMessage};
@@ -131,6 +132,7 @@ pub fn run() {
             config::set_active_provider,
             execute_code,
             receive_message,
+            preview::create_preview,
         ])
         .setup(|app| {
             // Get data directory using app directly
