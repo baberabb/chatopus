@@ -22,6 +22,13 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   const [output, setOutput] = useState<string | null>(null);
   const [code, setCode] = useState(initialValue);
 
+  // Update code when streaming new content
+  React.useEffect(() => {
+    if (isStreaming) {
+      setCode(initialValue);
+    }
+  }, [initialValue, isStreaming]);
+
   // Always use the code state which contains any edits
   const displayCode = code;
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
