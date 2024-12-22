@@ -179,6 +179,11 @@ impl ChatProvider for AnthropicProvider {
 
         // Merge custom parameters if any
         if let Some(custom_params) = &self.base.config.custom_parameters {
+            #[cfg(debug_assertions)]
+            eprintln!(
+                "ANTHROPIC CUSTOM PARAMS: {:?}",
+                serde_json::to_string_pretty(&custom_params)
+            );
             params.extend(custom_params.clone());
         }
 
