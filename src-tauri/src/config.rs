@@ -8,8 +8,10 @@ use tauri_plugin_store::StoreExt;
 pub struct ProviderSettings {
     pub api_key: String,
     pub model: String,
-    pub max_tokens: u32,
-    pub streaming: bool,
+    #[serde(default)]
+    pub parameters: HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub custom_parameters: Option<HashMap<String, serde_json::Value>>,
     #[serde(default)]
     pub api_version: Option<String>,
     #[serde(default)]
@@ -20,8 +22,6 @@ pub struct ProviderSettings {
     pub retry_attempts: Option<u32>,
     #[serde(default)]
     pub additional_headers: Option<HashMap<String, String>>,
-    #[serde(default)]
-    pub additional_params: Option<HashMap<String, serde_json::Value>>,
 }
 
 fn default_timeout_seconds() -> Option<u64> {
@@ -45,15 +45,20 @@ impl Default for AppConfig {
             "anthropic".to_string(),
             ProviderSettings {
                 api_key: String::new(),
-                model: "claude-3-5-sonnet-20240620".to_string(),
-                max_tokens: 1024,
-                streaming: true,
+                model: "claude-3-sonnet-20240229".to_string(),
+                parameters: {
+                    let mut params = HashMap::new();
+                    params.insert("max_tokens".to_string(), json!(1024));
+                    params.insert("streaming".to_string(), json!(true));
+                    params.insert("temperature".to_string(), json!(0.7));
+                    params
+                },
+                custom_parameters: None,
                 api_version: None,
                 base_url: None,
                 timeout_seconds: Some(120),
                 retry_attempts: Some(3),
                 additional_headers: None,
-                additional_params: None,
             },
         );
 
@@ -129,13 +134,19 @@ pub async fn update_provider_settings(
     settings: ProviderSettings,
     config: State<'_, ConfigState>,
 ) -> Result<(), String> {
+    #[cfg(debug_assertions)]
+    eprintln!(
+        "UPDATING PROVIDER SETTINGS - PARAMS: {}",
+        serde_json::to_string_pretty(&settings.parameters).unwrap_or_default()
+    );
+
     let store = app
         .store(STORE_PATH)
         .map_err(|e| format!("Failed to access store: {}", e))?;
 
     // Update in-memory config
     let mut config_guard = config.0.lock();
-    config_guard.providers.insert(provider, settings);
+    config_guard.providers.insert(provider.clone(), settings);
 
     // Save to store
     store.set("config", json!(config_guard.clone()));

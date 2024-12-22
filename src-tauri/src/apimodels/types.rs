@@ -33,8 +33,7 @@ pub struct ChatRequest {
     pub model: String,
     pub max_tokens: u32,
     pub stream: bool,
-    #[serde(flatten)]
-    pub additional_params: Option<std::collections::HashMap<String, serde_json::Value>>,
+    pub parameters: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

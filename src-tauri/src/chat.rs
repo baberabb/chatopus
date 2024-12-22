@@ -58,20 +58,26 @@ pub async fn process_message(
                 details: Some("No provider configured".to_string()),
             })?;
 
+        let streaming = provider_settings
+            .parameters
+            .get("streaming")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
         (
             config.active_provider.clone(),
             ProviderConfig {
                 api_key: provider_settings.api_key.clone(),
                 model: provider_settings.model.clone(),
-                max_tokens: provider_settings.max_tokens,
+                parameters: provider_settings.parameters.clone(),
+                custom_parameters: provider_settings.custom_parameters.clone(),
                 api_version: provider_settings.api_version.clone(),
                 base_url: provider_settings.base_url.clone(),
                 timeout_seconds: provider_settings.timeout_seconds,
                 retry_attempts: provider_settings.retry_attempts,
                 additional_headers: provider_settings.additional_headers.clone(),
-                additional_params: provider_settings.additional_params.clone(),
             },
-            provider_settings.streaming,
+            streaming,
         )
     };
 

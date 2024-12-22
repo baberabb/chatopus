@@ -5,27 +5,32 @@ use std::collections::HashMap;
 pub struct ProviderConfig {
     pub api_key: String,
     pub model: String,
-    pub max_tokens: u32,
+    pub parameters: HashMap<String, serde_json::Value>,
+    pub custom_parameters: Option<HashMap<String, serde_json::Value>>,
     pub api_version: Option<String>,
     pub base_url: Option<String>,
     pub timeout_seconds: Option<u64>,
     pub retry_attempts: Option<u32>,
     pub additional_headers: Option<HashMap<String, String>>,
-    pub additional_params: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 impl Default for ProviderConfig {
     fn default() -> Self {
+        let mut parameters = HashMap::new();
+        parameters.insert("max_tokens".to_string(), serde_json::json!(1000));
+        parameters.insert("streaming".to_string(), serde_json::json!(true));
+        parameters.insert("temperature".to_string(), serde_json::json!(0.7));
+
         Self {
             api_key: String::new(),
             model: String::new(),
-            max_tokens: 1000,
+            parameters,
+            custom_parameters: None,
             api_version: None,
             base_url: None,
             timeout_seconds: Some(120),
             retry_attempts: Some(3),
             additional_headers: Some(HashMap::new()),
-            additional_params: Some(HashMap::new()),
         }
     }
 }

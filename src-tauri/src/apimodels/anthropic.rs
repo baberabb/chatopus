@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use futures_util::{FutureExt, StreamExt, pin_mut};
+use bytes::Bytes;
+use futures_util::{pin_mut, FutureExt, StreamExt};
 use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
-use bytes::Bytes;
 
 use super::config::{ProviderConfig, RequestConfig};
 use super::error::{ProviderError, ProviderResult};
@@ -27,6 +27,8 @@ struct AnthropicRequest {
     messages: Vec<AnthropicMessage>,
     max_tokens: u32,
     stream: bool,
+    #[serde(flatten)]
+    parameters: Option<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -58,6 +60,12 @@ pub struct AnthropicProvider {
 impl AnthropicProvider {
     #[inline]
     pub fn new(config: ProviderConfig) -> Self {
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "ANTHROPIC PROVIDER INIT PARAMS: {}",
+            serde_json::to_string_pretty(&config.parameters).unwrap_or_default()
+        );
+
         Self {
             base: BaseProvider::new(config),
         }
@@ -65,7 +73,8 @@ impl AnthropicProvider {
 
     #[inline]
     fn convert_messages(messages: Vec<Message>) -> Vec<AnthropicMessage> {
-        messages.into_iter()
+        messages
+            .into_iter()
             .map(|msg| AnthropicMessage {
                 role: msg.role,
                 content: msg.content,
@@ -79,7 +88,8 @@ impl AnthropicProvider {
         headers.insert("X-API-Key", config.api_key.parse().unwrap());
         headers.insert(
             "anthropic-version",
-            config.api_version
+            config
+                .api_version
                 .as_deref()
                 .unwrap_or(DEFAULT_API_VERSION)
                 .parse()
@@ -89,6 +99,13 @@ impl AnthropicProvider {
     }
 
     async fn make_request(&self, request: &AnthropicRequest) -> ProviderResult<reqwest::Response> {
+        // Debug log the request parameters
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "ANTHROPIC REQUEST PARAMS: {}",
+            serde_json::to_string_pretty(&request.parameters).unwrap_or_default()
+        );
+
         self.base
             .client
             .post(API_ENDPOINT)
@@ -151,12 +168,45 @@ impl ChatProvider for AnthropicProvider {
     }
 
     async fn prepare_request(&self, messages: Vec<Message>, config: &RequestConfig) -> ChatRequest {
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "ANTHROPIC PREPARE REQUEST - INITIAL PARAMS: {}",
+            serde_json::to_string_pretty(&self.base.config.parameters).unwrap_or_default()
+        );
+
+        // Start with provider parameters
+        let mut params = self.base.config.parameters.clone();
+
+        // Merge custom parameters if any
+        if let Some(custom_params) = &self.base.config.custom_parameters {
+            params.extend(custom_params.clone());
+        }
+
+        // Ensure required parameters have defaults
+        if !params.contains_key("temperature") {
+            params.insert("temperature".to_string(), serde_json::json!(0.7));
+        }
+        if !params.contains_key("max_tokens") {
+            params.insert("max_tokens".to_string(), serde_json::json!(1024));
+        }
+
+        #[cfg(debug_assertions)]
+        eprintln!(
+            "ANTHROPIC PREPARE REQUEST - FINAL PARAMS: {}",
+            serde_json::to_string_pretty(&params).unwrap_or_default()
+        );
+
+        let max_tokens = params
+            .get("max_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1024) as u32;
+
         ChatRequest {
             messages,
             model: self.base.config.model.clone(),
-            max_tokens: self.base.config.max_tokens,
+            max_tokens,
             stream: config.streaming,
-            additional_params: self.base.config.additional_params.clone(),
+            parameters: Some(params),
         }
     }
 
@@ -171,6 +221,7 @@ impl ChatProvider for AnthropicProvider {
             messages: Self::convert_messages(request.messages),
             max_tokens: request.max_tokens,
             stream: true,
+            parameters: request.parameters,
         };
 
         let mut full_response = String::with_capacity(RESPONSE_BUFFER_SIZE);
@@ -210,18 +261,27 @@ impl ChatProvider for AnthropicProvider {
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             messages: Self::convert_messages(request.messages),
-            max_tokens: request.max_tokens,
+            max_tokens: request
+                .parameters
+                .as_ref()
+                .and_then(|p| p.get("max_tokens"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1024) as u32,
             stream: false,
+            parameters: request.parameters,
         };
 
-        let response = BaseProvider::handle_response_error(self.make_request(&anthropic_request).await?).await?;
+        let response =
+            BaseProvider::handle_response_error(self.make_request(&anthropic_request).await?)
+                .await?;
 
         let response_data: NonStreamingResponse = response
             .json()
             .await
             .map_err(|e| ProviderError::ParseError(e.to_string()))?;
 
-        let content = response_data.content
+        let content = response_data
+            .content
             .into_iter()
             .map(|block| block.text)
             .collect::<String>();
