@@ -13,7 +13,11 @@ interface CodeBlockProps {
 
 interface CodeBlockButtonProps {
   onClick: () => void;
-  icon: React.ReactElement;
+  icon: React.ReactElement<{
+    size?: number;
+    className?: string;
+    [key: string]: any;  // Allow any other props the icon might need
+  }>;
   label: string;
   disabled?: boolean;
   title?: string;
