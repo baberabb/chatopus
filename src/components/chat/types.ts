@@ -8,4 +8,14 @@ export interface Message {
     thumbsUp: number;
   };
   isEditing?: boolean;
+  status?: 'pending' | 'streaming' | 'complete' | 'error';
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  preview: string;
+  model: string;
+  messageCount: number;
+  timestamp: string;
 }

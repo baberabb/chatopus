@@ -19,39 +19,10 @@ export function ChatContainer() {
     isStreaming,
     isLoading,
     error,
-    lastAttemptedMessage,
-    setLastAttemptedMessage,
-    processMessage,
+    sendMessage,
     handleEdit,
-    isCancellable,
     cancelMessage,
-    // clearChat,
   } = useChat();
-
-  const handleSend = async (message: string) => {
-    setLastAttemptedMessage(message);
-    await processMessage(message);
-  };
-
-  const handleRetry = async () => {
-    if (lastAttemptedMessage) {
-      const lastAssistantIndex = [...messages]
-        .reverse()
-        .findIndex((msg) => msg.role === "assistant");
-      if (lastAssistantIndex !== -1) {
-        const messageIndex = messages.length - 1 - lastAssistantIndex;
-        const messageId = messages[messageIndex].id;
-        await processMessage(lastAttemptedMessage, messageId);
-      } else {
-        await processMessage(lastAttemptedMessage);
-      }
-    }
-  };
-
-  const handleReact = (messageId: string) => {
-    // TODO: Implement reaction persistence
-    console.log("React to message:", messageId);
-  };
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -59,6 +30,11 @@ export function ChatContainer() {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const handleReact = (messageId: string) => {
+    // TODO: Implement reaction persistence
+    console.log("React to message:", messageId);
+  };
 
   return (
     <ErrorBoundary>
@@ -117,18 +93,25 @@ export function ChatContainer() {
             )}
             {error && (
               <ErrorDisplay
-                message={error.message}
-                details={error.details}
-                onRetry={handleRetry}
+                message={error}
+                onRetry={() => {
+                  // Retry last message
+                  const lastUserMessage = [...messages]
+                    .reverse()
+                    .find((msg) => msg.role === "user");
+                  if (lastUserMessage) {
+                    sendMessage(lastUserMessage.content);
+                  }
+                }}
               />
             )}
           </div>
         </div>
 
         <InputArea
-          onSend={handleSend}
+          onSend={sendMessage}
           isStreaming={isStreaming}
-          isCancellable={isCancellable}
+          isCancellable={isStreaming}
           onCancel={cancelMessage}
         />
       </div>

@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { initializeStore, themes } from './store/initStore';
 import { Theme, ThemeType, ModelConfig, ProviderSettings, ProviderType } from './types';
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 interface ThemeStore {
   themeType: ThemeType;
@@ -10,15 +12,30 @@ interface ThemeStore {
 }
 
 interface ChatStore {
+  // State
   messages: Message[];
   conversations: Conversation[];
   currentConversationId: string | null;
+  isStreaming: boolean;
+  streamingContent: string;
+  error: string | null;
+  isLoading: boolean;
+
+  // Message actions
+  sendMessage: (content: string) => Promise<void>;
+  appendStreamChunk: (chunk: string) => void;
+  completeStream: (messageId: string) => void;
   setMessages: (messages: Message[]) => void;
-  setConversations: (conversations: Conversation[]) => void;
-  setCurrentConversationId: (id: string | null) => void;
-  addMessage: (message: Message) => void;
   updateLastMessage: (content: string) => void;
   clearMessages: () => void;
+
+  // Conversation actions
+  loadConversations: () => Promise<void>;
+  loadConversation: (id: string) => Promise<void>;
+  setCurrentConversationId: (id: string | null) => Promise<void>;
+  createConversation: () => Promise<string>;
+  updateConversation: (id: string, updates: Partial<Conversation>) => Promise<void>;
+  deleteConversation: (id: string) => Promise<void>;
 }
 
 interface ModelStore {
@@ -39,6 +56,7 @@ export interface Message {
     thumbsUp: number;
   };
   isEditing?: boolean;
+  status?: 'pending' | 'streaming' | 'complete' | 'error';
 }
 
 export interface Conversation {
@@ -52,6 +70,14 @@ export interface Conversation {
 
 const THEME_STORAGE_KEY = "theme";
 const MODEL_CONFIG_STORAGE_KEY = "model_config";
+
+const createMessage = (content: string, role: string, status: Message['status'] = 'complete'): Message => ({
+  id: crypto.randomUUID(),
+  content,
+  role,
+  timestamp: new Date().toISOString(),
+  status,
+});
 
 const applyTheme = (themeType: ThemeType, theme: Theme) => {
   requestAnimationFrame(() => {
@@ -78,16 +104,96 @@ export const useThemeStore = create<ThemeStore>((set) => ({
     }),
 }));
 
-export const useChatStore = create<ChatStore>((set) => ({
+export const useChatStore = create<ChatStore>((set, get) => ({
+  // State
   messages: [],
   conversations: [],
   currentConversationId: null,
+  isStreaming: false,
+  streamingContent: '',
+  error: null,
+  isLoading: false,
+
+  // Message actions
+  sendMessage: async (content: string) => {
+    const state = get();
+    if (!state.currentConversationId) {
+      const newId = await state.createConversation();
+      await state.setCurrentConversationId(newId);
+    }
+
+    // Add user message immediately
+    const userMessage = createMessage(content, 'user');
+    set(state => ({
+      messages: [...state.messages, userMessage],
+      error: null
+    }));
+
+    // Create empty assistant message
+    const assistantMessage = createMessage('', 'assistant', 'streaming');
+    set(state => ({
+      messages: [...state.messages, assistantMessage],
+      isStreaming: true,
+      streamingContent: ''
+    }));
+
+    try {
+      // Process message
+      const response = await invoke<{ reply: string, message_id: string }>('process_message', { 
+        message: content 
+      });
+
+      // Update assistant message with ID from backend
+      set(state => ({
+        messages: state.messages.map((msg, index) => 
+          index === state.messages.length - 1
+            ? { ...msg, id: response.message_id }
+            : msg
+        )
+      }));
+
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to send message',
+        isStreaming: false 
+      });
+
+      // Mark assistant message as error
+      set(state => ({
+        messages: state.messages.map((msg, index) => 
+          index === state.messages.length - 1
+            ? { ...msg, status: 'error' }
+            : msg
+        )
+      }));
+    }
+  },
+
+  appendStreamChunk: (chunk: string) => {
+    set(state => ({
+      streamingContent: state.streamingContent + chunk,
+      messages: state.messages.map((msg, index) => 
+        index === state.messages.length - 1 
+          ? { ...msg, content: state.streamingContent + chunk }
+          : msg
+      )
+    }));
+  },
+
+  completeStream: (messageId: string) => {
+    set(state => ({
+      isStreaming: false,
+      streamingContent: '',
+      messages: state.messages.map(msg =>
+        msg.id === messageId
+          ? { ...msg, status: 'complete' }
+          : msg
+      )
+    }));
+  },
+
   setMessages: (messages) => set({ messages }),
-  setConversations: (conversations) => set({ conversations }),
-  setCurrentConversationId: (id) => set({ currentConversationId: id }),
-  addMessage: (message) => set((state) => ({ 
-    messages: [...state.messages, message] 
-  })),
+  
   updateLastMessage: (content) => set((state) => {
     const messages = [...state.messages];
     if (messages.length > 0) {
@@ -98,7 +204,93 @@ export const useChatStore = create<ChatStore>((set) => ({
     }
     return { messages };
   }),
-  clearMessages: () => set({ messages: [] })
+
+  clearMessages: () => set({ 
+    messages: [],
+    streamingContent: '',
+    isStreaming: false,
+    error: null
+  }),
+
+  // Conversation actions
+  loadConversations: async () => {
+    set({ isLoading: true });
+    try {
+      const conversations = await invoke<Conversation[]>('get_conversations');
+      set({ conversations, isLoading: false });
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to load conversations',
+        isLoading: false 
+      });
+    }
+  },
+
+  loadConversation: async (id: string) => {
+    set({ isLoading: true });
+    try {
+      const messages = await invoke<Message[]>('load_conversation_messages', {
+        conversationId: parseInt(id, 10)
+      });
+      set({ 
+        messages,
+        currentConversationId: id,
+        isLoading: false,
+        error: null
+      });
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to load conversation',
+        isLoading: false 
+      });
+    }
+  },
+
+  setCurrentConversationId: async (id: string | null) => {
+    if (id === get().currentConversationId) return;
+    
+    set({ currentConversationId: id });
+    if (id) {
+      await get().loadConversation(id);
+    } else {
+      set({ messages: [] });
+    }
+  },
+
+  createConversation: async () => {
+    try {
+      const newId = await invoke<string>('clear_chat_history');
+      await get().loadConversations();
+      return newId;
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to create conversation' });
+      throw error;
+    }
+  },
+
+  updateConversation: async (id: string, updates: Partial<Conversation>) => {
+    try {
+      await invoke('update_conversation', { id: parseInt(id, 10), updates });
+      await get().loadConversations();
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to update conversation' });
+    }
+  },
+
+  deleteConversation: async (id: string) => {
+    try {
+      await invoke('delete_conversation', { conversationId: parseInt(id, 10) });
+      
+      // If deleted current conversation, clear it
+      if (id === get().currentConversationId) {
+        set({ currentConversationId: null, messages: [] });
+      }
+      
+      await get().loadConversations();
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to delete conversation' });
+    }
+  }
 }));
 
 export const useModelStore = create<ModelStore>((set) => ({
@@ -190,6 +382,9 @@ initializeStore().then(({ theme, modelConfig }) => {
   
   // Apply theme after initialization
   applyTheme(theme.type, theme.values);
+
+  // Load initial conversations
+  useChatStore.getState().loadConversations();
 });
 
 export const useZustandTheme = () => {
@@ -204,3 +399,16 @@ export const useZustandTheme = () => {
   }
   return store;
 };
+
+// Set up event listeners
+listen("stream-response", (event) => {
+  const chunk = event.payload as string;
+  if (useChatStore.getState().isStreaming) {
+    useChatStore.getState().appendStreamChunk(chunk);
+  }
+});
+
+listen("stream-complete", (event) => {
+  const messageId = event.payload as string;
+  useChatStore.getState().completeStream(messageId);
+});

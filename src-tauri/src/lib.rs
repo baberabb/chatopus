@@ -127,6 +127,7 @@ pub fn run() {
             chat::load_conversation_messages,
             chat::delete_conversation,
             chat::cancel_message,
+            chat::edit_message,
             config::get_config,
             config::update_config,
             config::update_provider_settings,
@@ -149,9 +150,6 @@ pub fn run() {
             let db = runtime.block_on(setup_db(&data_dir))?;
 
             // Setup app state using app directly
-            app.manage(chat::ChatHistory(Arc::new(parking_lot::Mutex::new(
-                Vec::new(),
-            ))));
             app.manage(chat::CancellationState::default());
             app.manage(config::ConfigState(parking_lot::Mutex::new(
                 config::AppConfig::default(),

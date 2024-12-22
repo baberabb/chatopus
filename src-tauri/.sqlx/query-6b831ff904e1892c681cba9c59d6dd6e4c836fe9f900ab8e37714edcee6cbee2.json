@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT \n            id as \"id!\",\n            conversation_id as \"conversation_id!\",\n            role as \"role!\",\n            content as \"content!\",\n            created_at as \"created_at!\",\n            metadata,\n            original_message_id\n        FROM messages \n        WHERE id = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "conversation_id!",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "role!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "content!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "metadata",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "original_message_id",
+        "ordinal": 6,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "6b831ff904e1892c681cba9c59d6dd6e4c836fe9f900ab8e37714edcee6cbee2"
+}

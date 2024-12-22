@@ -42,7 +42,6 @@ import { ModelSettings } from "./settings/ModelSettings";
 import { ThemeToggle } from "./ThemeToggle";
 import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
 import { useZustandTheme, useChatStore } from "../store";
-import { invoke } from "@tauri-apps/api/core";
 
 const data = {
   user: {
@@ -105,68 +104,45 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
     conversations,
     currentConversationId,
     setCurrentConversationId,
-    setConversations,
+    loadConversations,
+    loadConversation,
+    deleteConversation,
+    createConversation,
+    error,
+    isLoading,
   } = useChatStore();
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
 
   // Load conversations
   React.useEffect(() => {
-    const loadConversations = async () => {
-      try {
-        setIsLoading(true);
-        const convos = await invoke<any[]>("get_conversations");
-        setConversations(convos);
-      } catch (err: any) {
-        console.error("Error loading conversations:", err);
-        setError(err?.message || "Failed to load conversations");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadConversations();
-  }, [setConversations]);
+  }, [loadConversations]);
 
   const handleChatSelect = async (chatId: string) => {
     try {
-      await invoke("load_conversation_messages", {
-        conversationId: parseInt(chatId, 10),
-      });
+      await loadConversation(chatId);
       setCurrentConversationId(chatId);
       setOpen(true);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error loading conversation:", err);
-      setError(err?.message || "Failed to load conversation");
     }
   };
 
   const handleDelete = async (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation(); // Prevent chat selection when clicking delete
     try {
-      await invoke("delete_conversation", {
-        conversationId: parseInt(chatId, 10),
-      });
-      setConversations(conversations.filter((chat) => chat.id !== chatId));
-      if (currentConversationId === chatId) {
-        setCurrentConversationId(null);
-      }
-    } catch (err: any) {
+      await deleteConversation(chatId);
+    } catch (err) {
       console.error("Error deleting conversation:", err);
-      setError(err?.message || "Failed to delete conversation");
     }
   };
 
   const handleNewChat = async () => {
     try {
-      await invoke("clear_chat_history");
-      setCurrentConversationId(null);
-      // Reload conversations to get the new one
-      const convos = await invoke<any[]>("get_conversations");
-      setConversations(convos);
-    } catch (err: any) {
+      const newId = await createConversation();
+      await setCurrentConversationId(newId);
+      await loadConversations();
+    } catch (err) {
       console.error("Error creating new chat:", err);
-      setError(err?.message || "Failed to create new chat");
     }
   };
 
