@@ -29,6 +29,7 @@ export function useChat() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCancellable, setIsCancellable] = useState(false);
 
   // Load messages when conversation changes
   useEffect(() => {
@@ -93,6 +94,19 @@ export function useChat() {
     });
   };
 
+  const cancelMessage = async () => {
+    try {
+      await invoke("cancel_message");
+      setIsCancellable(false);
+    } catch (error: any) {
+      console.error("Error cancelling message:", error);
+      setError({
+        message: "Failed to cancel message",
+        details: error?.message,
+      });
+    }
+  };
+
   const processMessage = async (messageText: string, existingMessageId?: string) => {
     try {
       setError(null);
@@ -114,6 +128,7 @@ export function useChat() {
       if (streamingEnabled) {
         setStreamBuffer("");
         setIsStreaming(true);
+        setIsCancellable(true);
         if (existingMessageId) {
           const messageIndex = messages.findIndex(
             (msg) => msg.id === existingMessageId
@@ -180,6 +195,7 @@ export function useChat() {
       });
     } finally {
       setIsStreaming(false);
+      setIsCancellable(false);
       // TODO: fix- not callable
       setRetryingMessageId(null);
     }
@@ -272,6 +288,8 @@ export function useChat() {
     setMessages,
     setCurrentConversationId,
     handleEdit,
-    editingMessageId
+    editingMessageId,
+    isCancellable,
+    cancelMessage
   };
 }

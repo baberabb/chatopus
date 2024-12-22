@@ -126,6 +126,7 @@ pub fn run() {
             chat::get_conversations,
             chat::load_conversation_messages,
             chat::delete_conversation,
+            chat::cancel_message,
             config::get_config,
             config::update_config,
             config::update_provider_settings,
@@ -151,6 +152,7 @@ pub fn run() {
             app.manage(chat::ChatHistory(Arc::new(parking_lot::Mutex::new(
                 Vec::new(),
             ))));
+            app.manage(chat::CancellationState::default());
             app.manage(config::ConfigState(parking_lot::Mutex::new(
                 config::AppConfig::default(),
             )));

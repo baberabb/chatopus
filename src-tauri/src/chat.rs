@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
+use tokio::sync::broadcast;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Response {
@@ -20,12 +21,22 @@ pub struct Response {
 
 pub struct ChatHistory(pub Arc<parking_lot::Mutex<Vec<Message>>>);
 
+#[derive(Clone)]
+pub struct CancellationState(pub Arc<parking_lot::Mutex<Option<broadcast::Sender<()>>>>);
+
+impl Default for CancellationState {
+    fn default() -> Self {
+        Self(Arc::new(parking_lot::Mutex::new(None)))
+    }
+}
+
 #[tauri::command]
 pub async fn process_message(
     message: String,
     app_handle: AppHandle,
     chat_history: State<'_, ChatHistory>,
     config_state: State<'_, ConfigState>,
+    cancellation_state: State<'_, CancellationState>,
     window: Window,
 ) -> Result<Response, ErrorResponse> {
     println!("Received message: {}", message);
@@ -101,6 +112,13 @@ pub async fn process_message(
         history.clone()
     };
 
+    // Create new cancellation channel
+    let (cancel_tx, cancel_rx) = broadcast::channel(1);
+    {
+        let mut cancel_state = cancellation_state.0.lock();
+        *cancel_state = Some(cancel_tx);
+    }
+
     let full_response = if provider.supports_streaming() && streaming_enabled {
         let window = window.clone();
         let callback = Box::new(move |response: StreamResponse| {
@@ -117,6 +135,7 @@ pub async fn process_message(
                     streaming: true,
                     ..Default::default()
                 }),
+                Some(cancel_rx),
             )
             .await
         {
@@ -137,6 +156,7 @@ pub async fn process_message(
                     streaming: false,
                     ..Default::default()
                 }),
+                None,
             )
             .await
         {
@@ -168,6 +188,12 @@ pub async fn process_message(
             let mut history = chat_history.0.lock();
             history.push(assistant_message);
         }
+    }
+
+    // Clear cancellation channel
+    {
+        let mut cancel_state = cancellation_state.0.lock();
+        *cancel_state = None;
     }
 
     Ok(Response {
@@ -261,6 +287,17 @@ pub async fn load_conversation_messages(
     }
 
     Ok(messages)
+}
+
+#[tauri::command]
+pub async fn cancel_message(
+    cancellation_state: State<'_, CancellationState>,
+) -> Result<(), ErrorResponse> {
+    let cancel_state = cancellation_state.0.lock();
+    if let Some(tx) = &*cancel_state {
+        let _ = tx.send(());
+    }
+    Ok(())
 }
 
 #[tauri::command]

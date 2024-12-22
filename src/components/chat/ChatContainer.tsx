@@ -15,6 +15,7 @@ export function ChatContainer() {
 
   const {
     messages,
+    currentConversationId,
     isStreaming,
     isLoading,
     error,
@@ -22,6 +23,8 @@ export function ChatContainer() {
     setLastAttemptedMessage,
     processMessage,
     handleEdit,
+    isCancellable,
+    cancelMessage,
     // clearChat,
   } = useChat();
 
@@ -107,6 +110,7 @@ export function ChatContainer() {
                     onReact={handleReact}
                     onEdit={handleEdit}
                     isStreaming={isStreaming && index === messages.length - 1}
+                    conversationId={currentConversationId}
                   />
                 </React.Fragment>
               ))
@@ -121,7 +125,12 @@ export function ChatContainer() {
           </div>
         </div>
 
-        <InputArea onSend={handleSend} isStreaming={isStreaming} />
+        <InputArea
+          onSend={handleSend}
+          isStreaming={isStreaming}
+          isCancellable={isCancellable}
+          onCancel={cancelMessage}
+        />
       </div>
     </ErrorBoundary>
   );

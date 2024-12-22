@@ -1,14 +1,16 @@
 import React, { useState } from "react";
-import { Paperclip, Zap, CornerRightUp } from "lucide-react";
+import { Paperclip, Zap, CornerRightUp, XCircle } from "lucide-react";
 import { useZustandTheme } from "../../store";
 
 interface InputAreaProps {
   onSend: (message: string) => void;
   isStreaming: boolean;
+  isCancellable?: boolean;
+  onCancel?: () => void;
 }
 
 export const InputArea: React.FC<InputAreaProps> = React.memo(
-  ({ onSend, isStreaming }) => {
+  ({ onSend, isStreaming, isCancellable, onCancel }) => {
     const { theme } = useZustandTheme();
     const [input, setInput] = useState("");
 
@@ -53,13 +55,22 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
               rows={1}
               disabled={isStreaming}
             />
-            <button
-              className="p-3 text-gray-400 hover:text-white transition-colors"
-              onClick={handleSend}
-              disabled={isStreaming}
-            >
-              {isStreaming ? <Zap size={20} /> : <CornerRightUp size={20} />}
-            </button>
+            {isCancellable && onCancel ? (
+              <button
+                className="p-3 text-red-400 hover:text-red-500 transition-colors"
+                onClick={onCancel}
+              >
+                <XCircle size={20} />
+              </button>
+            ) : (
+              <button
+                className="p-3 text-gray-400 hover:text-white transition-colors"
+                onClick={handleSend}
+                disabled={isStreaming}
+              >
+                {isStreaming ? <Zap size={20} /> : <CornerRightUp size={20} />}
+              </button>
+            )}
           </div>
         </div>
       </div>

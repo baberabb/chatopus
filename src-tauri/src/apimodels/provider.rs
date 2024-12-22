@@ -1,7 +1,9 @@
 use async_trait::async_trait;
 use reqwest::{Client, ClientBuilder, Response};
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
 
 use crate::apimodels::config::{ProviderConfig, RequestConfig};
 use crate::apimodels::error::{ProviderError, ProviderResult};
@@ -80,6 +82,7 @@ pub trait ChatProvider: Send + Sync {
         &self,
         request: ChatRequest,
         callback: StreamCallback,
+        cancel_token: broadcast::Receiver<()>,
     ) -> ProviderResult<String>;
 
     async fn send_message_blocking(&self, request: ChatRequest) -> ProviderResult<ChatResponse>;
@@ -89,12 +92,13 @@ pub trait ChatProvider: Send + Sync {
         messages: Vec<Message>,
         callback: Option<StreamCallback>,
         request_config: Option<RequestConfig>,
+        cancel_token: Option<broadcast::Receiver<()>>,
     ) -> ProviderResult<String> {
         let config = request_config.unwrap_or_default();
         let request = self.prepare_request(messages, &config).await;
 
-        match (self.supports_streaming(), callback) {
-            (true, Some(cb)) => self.send_message_streaming(request, cb).await,
+        match (self.supports_streaming(), callback, cancel_token) {
+            (true, Some(cb), Some(token)) => self.send_message_streaming(request, cb, token).await,
             _ => {
                 let response = self.send_message_blocking(request).await?;
                 Ok(response.content)

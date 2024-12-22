@@ -1,6 +1,7 @@
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures_util::{FutureExt, StreamExt};
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 
 use super::config::{ProviderConfig, RequestConfig};
 use super::error::{ProviderError, ProviderResult};
@@ -85,6 +86,7 @@ impl ChatProvider for AnthropicProvider {
         &self,
         request: ChatRequest,
         callback: StreamCallback,
+        mut cancel_token: broadcast::Receiver<()>,
     ) -> ProviderResult<String> {
         let model = request.model.clone();
         let anthropic_request = AnthropicRequest {
@@ -118,7 +120,16 @@ impl ChatProvider for AnthropicProvider {
         let mut full_response = String::new();
         let mut buffer = String::new();
 
-        while let Some(item) = stream.next().await {
+        while let Some(item) = futures_util::select! {
+            item = stream.next().fuse() => item,
+            _ = cancel_token.recv().fuse() => {
+                callback(StreamResponse {
+                    text: "\n[Cancelled]".to_string(),
+                    is_done: true,
+                });
+                return Ok(format!("{}\n[Cancelled]", full_response));
+            }
+        } {
             let chunk = item.map_err(|e| ProviderError::RequestError(e.to_string()))?;
             buffer.push_str(&String::from_utf8_lossy(&chunk));
 
