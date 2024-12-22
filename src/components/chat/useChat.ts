@@ -1,77 +1,74 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Message, useChatStore } from "../../store";
+import { createTempMessage, findMessageById } from "./utils";
+
+interface ChatError {
+  message: string;
+  details?: string;
+}
 
 export function useChat() {
-  // TODO: fix
-  // const { config } = useModelStore();
-  const { 
-    messages, 
+  const {
+    messages,
     currentConversationId,
-    setMessages, 
+    setMessages,
     setCurrentConversationId,
-    addMessage, 
+    addMessage,
     updateLastMessage,
-    clearMessages
+    clearMessages,
   } = useChatStore();
-  
-  const [streamBuffer, setStreamBuffer] = useState("");
-  const [error, setError] = useState<{
-    message: string;
-    details?: string;
-  } | null>(null);
-  const [lastAttemptedMessage, setLastAttemptedMessage] = useState<string>("");
-  // TODO: fix
-  // const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
-  const [_, setRetryingMessageId] = useState<string | null>(null);
 
+  const [streamBuffer, setStreamBuffer] = useState("");
+  const [error, setError] = useState<ChatError | null>(null);
+  const [lastAttemptedMessage, setLastAttemptedMessage] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isCancellable, setIsCancellable] = useState(false);
 
-  // Load messages when conversation changes
-  useEffect(() => {
-    const loadMessages = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        let loadedMessages: Message[];
-        if (currentConversationId) {
-          console.log("Loading messages for conversation ID:", currentConversationId);
-          loadedMessages = await invoke<Message[]>("load_conversation_messages", {
-            conversationId: parseInt(currentConversationId, 10)
-          });
-        } else {
-          // When no conversation exists, get_chat_history will create one
-          loadedMessages = await invoke<Message[]>("get_chat_history");
-          // Get the latest conversation ID after chat history is loaded
-          const conversations = await invoke<{id: number}[]>("get_conversations");
-          if (conversations && conversations.length > 0) {
-            setCurrentConversationId(conversations[0].id.toString());
-          }
-        }
-        setMessages(loadedMessages);
-      } catch (error: any) {
-        console.error("Error loading messages:", error);
-        setError({
-          message: "Failed to load messages",
-          details: error?.message,
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const handleError = useCallback((error: any, customMessage: string) => {
+    console.error(`Error: ${customMessage}:`, error);
+    setError({
+      message: customMessage,
+      details: error?.message || error?.toString(),
+    });
+  }, []);
 
+  const loadMessages = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      let loadedMessages: Message[];
+      if (currentConversationId) {
+        loadedMessages = await invoke<Message[]>("load_conversation_messages", {
+          conversationId: parseInt(currentConversationId, 10),
+        });
+      } else {
+        loadedMessages = await invoke<Message[]>("get_chat_history");
+        const conversations = await invoke<{ id: number }[]>("get_conversations");
+        if (conversations?.length > 0) {
+          setCurrentConversationId(conversations[0].id.toString());
+        }
+      }
+      setMessages(loadedMessages);
+    } catch (error: any) {
+      handleError(error, "Failed to load messages");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentConversationId, setMessages, setCurrentConversationId, handleError]);
+
+  useEffect(() => {
     loadMessages();
-  }, [currentConversationId]);
+  }, [loadMessages]);
 
   useEffect(() => {
     const unlisten = listen("stream-response", (event) => {
       const chunk = event.payload as string;
-      setStreamBuffer((prevBuffer) => prevBuffer + chunk);
+      setStreamBuffer((prev) => prev + chunk);
     });
 
     return () => {
@@ -85,25 +82,12 @@ export function useChat() {
     }
   }, [streamBuffer, isStreaming, updateLastMessage]);
 
-  const getCurrentTime = () => {
-    const now = new Date();
-    return now.toLocaleTimeString('en-US', { 
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true 
-    });
-  };
-
   const cancelMessage = async () => {
     try {
       await invoke("cancel_message");
       setIsCancellable(false);
     } catch (error: any) {
-      console.error("Error cancelling message:", error);
-      setError({
-        message: "Failed to cancel message",
-        details: error?.message,
-      });
+      handleError(error, "Failed to cancel message");
     }
   };
 
@@ -111,28 +95,19 @@ export function useChat() {
     try {
       setError(null);
       const config = await invoke<any>("get_config");
-      const streamingEnabled = config.providers[config.active_provider].streaming;
-      const currentModelName = config.providers[config.active_provider].model;
+      const { streaming: streamingEnabled, model: currentModelName } = config.providers[config.active_provider];
 
-      // Always add user message immediately
       if (!existingMessageId) {
-        addMessage({
-          id: "temp-user-" + Date.now(),
-          content: messageText,
-          role: "user",
-          timestamp: getCurrentTime(),
-          reactions: { thumbsUp: 0 },
-        });
+        addMessage(createTempMessage(messageText, "user"));
       }
 
       if (streamingEnabled) {
         setStreamBuffer("");
         setIsStreaming(true);
         setIsCancellable(true);
+
         if (existingMessageId) {
-          const messageIndex = messages.findIndex(
-            (msg) => msg.id === existingMessageId
-          );
+          const messageIndex = findMessageById(messages, existingMessageId);
           if (messageIndex !== -1) {
             const updatedMessages = [...messages];
             updatedMessages[messageIndex] = {
@@ -142,14 +117,7 @@ export function useChat() {
             setMessages(updatedMessages);
           }
         } else {
-          addMessage({
-            id: "temp-assistant-" + Date.now(),
-            content: "",
-            role: "assistant",
-            model: currentModelName,
-            timestamp: getCurrentTime(),
-            reactions: { thumbsUp: 0 },
-          });
+          addMessage(createTempMessage("", "assistant", currentModelName));
         }
       }
 
@@ -157,103 +125,66 @@ export function useChat() {
         message: messageText,
       });
 
-      // After successful processing, reload messages to get proper DB IDs
-      let updatedMessages: Message[];
-      if (currentConversationId) {
-        updatedMessages = await invoke<Message[]>("load_conversation_messages", {
-          conversationId: parseInt(currentConversationId, 10)
-        });
-      } else {
-        updatedMessages = await invoke<Message[]>("get_chat_history");
-        // Get the latest conversation ID after chat history is loaded
-        const conversations = await invoke<{id: number}[]>("get_conversations");
-        if (conversations && conversations.length > 0) {
-          setCurrentConversationId(conversations[0].id.toString());
-        }
-      }
-      setMessages(updatedMessages);
+      await loadMessages();
 
-      if (!streamingEnabled && response && response.reply && existingMessageId) {
-        const messageIndex = updatedMessages.findIndex(
-          (msg: Message) => msg.id === existingMessageId
-        );
+      if (!streamingEnabled && response?.reply && existingMessageId) {
+        const messageIndex = findMessageById(messages, existingMessageId);
         if (messageIndex !== -1) {
-          const newMessages = [...updatedMessages];
-          newMessages[messageIndex] = {
-            ...newMessages[messageIndex],
+          const updatedMessages = [...messages];
+          updatedMessages[messageIndex] = {
+            ...updatedMessages[messageIndex],
             content: response.reply,
           };
-          setMessages(newMessages);
+          setMessages(updatedMessages);
         }
       }
     } catch (error: any) {
-      console.error("Error in process_message:", error);
-      const errorDetails = error?.details || null;
-      setError({
-        message: error?.message || "An error occurred while processing your message.",
-        details: errorDetails,
-      });
+      handleError(error, "Failed to process message");
     } finally {
       setIsStreaming(false);
       setIsCancellable(false);
-      // TODO: fix- not callable
-      setRetryingMessageId(null);
     }
   };
 
   const handleEdit = async (messageId: string, newContent: string) => {
     try {
       setError(null);
-      
-      // If messageId matches editingMessageId, this is a save operation
-      // Otherwise, this is toggling edit mode
-      if (messageId === editingMessageId) {
-        // Update message in UI immediately
-        const messageIndex = messages.findIndex(msg => msg.id === messageId);
+      const isSaveOperation = messageId === editingMessageId;
+
+      if (isSaveOperation) {
+        const messageIndex = findMessageById(messages, messageId);
         if (messageIndex !== -1) {
           const updatedMessages = [...messages];
           updatedMessages[messageIndex] = {
             ...updatedMessages[messageIndex],
             content: newContent,
-            isEditing: false
+            isEditing: false,
           };
           setMessages(updatedMessages);
         }
-        
-        // Call backend to update message
-        await invoke("edit_message", {
-          messageId,
-          newContent
-        });
 
+        await invoke("edit_message", { messageId, newContent });
         setEditingMessageId(null);
       } else {
-        // Toggle edit mode
-        const messageIndex = messages.findIndex(msg => msg.id === messageId);
+        const messageIndex = findMessageById(messages, messageId);
         if (messageIndex !== -1) {
           const updatedMessages = [...messages];
           updatedMessages[messageIndex] = {
             ...updatedMessages[messageIndex],
-            isEditing: true
+            isEditing: true,
           };
           setMessages(updatedMessages);
         }
         setEditingMessageId(messageId);
       }
     } catch (error: any) {
-      console.error("Error editing message:", error);
-      setError({
-        message: "Failed to edit message",
-        details: error?.message
-      });
-      
-      // Revert UI state on error
-      const messageIndex = messages.findIndex(msg => msg.id === messageId);
+      handleError(error, "Failed to edit message");
+      const messageIndex = findMessageById(messages, messageId);
       if (messageIndex !== -1) {
         const updatedMessages = [...messages];
         updatedMessages[messageIndex] = {
           ...updatedMessages[messageIndex],
-          isEditing: false
+          isEditing: false,
         };
         setMessages(updatedMessages);
       }
@@ -267,11 +198,7 @@ export function useChat() {
       clearMessages();
       setCurrentConversationId(null);
     } catch (error: any) {
-      console.error("Error clearing chat history:", error);
-      setError({
-        message: "Failed to clear chat history",
-        details: error?.message,
-      });
+      handleError(error, "Failed to clear chat history");
     }
   };
 
@@ -290,6 +217,6 @@ export function useChat() {
     handleEdit,
     editingMessageId,
     isCancellable,
-    cancelMessage
+    cancelMessage,
   };
 }

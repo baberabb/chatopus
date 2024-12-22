@@ -1,3 +1,5 @@
+import { Message } from "./types";
+
 /**
  * Helper function to generate consistent colors for avatars based on string input
  */
@@ -34,3 +36,42 @@ export function stringAvatar(name: string | undefined) {
     children: initials,
   };
 }
+
+/**
+ * Helper function to get current time in consistent format
+ */
+export const getCurrentTime = () => {
+  return new Date().toLocaleTimeString('en-US', { 
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true 
+  });
+};
+
+/**
+ * Helper function to format message role display
+ */
+export const formatMessageRole = (role: string, model?: string) => {
+  return role === "user" ? "You" : model || "Assistant";
+};
+
+/**
+ * Helper function to find message index by ID
+ */
+export const findMessageById = (messages: Message[], id: string) => {
+  return messages.findIndex(msg => msg.id === id);
+};
+
+/**
+ * Helper function to create a temporary message object
+ */
+export const createTempMessage = (content: string, role: "user" | "assistant", model?: string): Message => {
+  return {
+    id: `temp-${role}-${Date.now()}`,
+    content,
+    role,
+    model,
+    timestamp: getCurrentTime(),
+    reactions: { thumbsUp: 0 },
+  };
+};
