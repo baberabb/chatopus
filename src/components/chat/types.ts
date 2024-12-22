@@ -1,29 +1,11 @@
 export interface Message {
   id: string;
-  content: string;
   role: string;
-  model?: string;
+  content: string;
   timestamp: string;
+  model?: string;
   reactions?: {
     thumbsUp: number;
   };
   isEditing?: boolean;
-}
-
-export interface ArchivedChat {
-  id: string;
-  title: string;
-  preview: string;
-  model: string;
-  messageCount: number;
-  timestamp: string;
-}
-
-export interface ChatContainerProps {
-  selectedArchivedChat?: ArchivedChat;
-}
-
-export interface StreamingState {
-  isStreaming: boolean;
-  setIsStreaming: (isStreaming: boolean) => void;
 }
