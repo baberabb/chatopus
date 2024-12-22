@@ -14,7 +14,8 @@ interface MessageBlockProps {
 }
 
 export const MessageBlock: React.FC<MessageBlockProps> = React.memo(
-  ({ message, onReact, onEdit, isStreaming, conversationId }) => {
+  // ({ message, onReact, onEdit, isStreaming, conversationId }) => {
+    ({ message, onReact, onEdit, isStreaming }) => {
     const { theme } = useZustandTheme();
     const [isHovered, setIsHovered] = useState(false);
     const [editContent, setEditContent] = useState(message.content);
@@ -55,8 +56,8 @@ export const MessageBlock: React.FC<MessageBlockProps> = React.memo(
         <div className="w-10 flex-shrink-0 flex justify-center">
           <UserAvatar user={message.role} />
         </div>
-        <div className="flex-grow min-w-0 pl-3 pr-2">
-          <div className="flex items-start">
+        <div className="flex-grow min-w-0 pl-3 pr-4">
+          {/*<div className="flex items-start">*/}
             {message.isEditing ? (
               <div className="flex-grow">
                 <textarea
@@ -126,7 +127,7 @@ export const MessageBlock: React.FC<MessageBlockProps> = React.memo(
                 </div>
               </>
             )}
-          </div>
+          {/*</div>*/}
         </div>
       </div>
     );

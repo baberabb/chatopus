@@ -84,7 +84,7 @@ export function ChatContainer() {
         {/* Message list */}
         <div className="absolute inset-0 top-10 bottom-[76px] overflow-hidden">
           <div
-            className="h-full overflow-y-auto py-4 px-4"
+            className="h-full overflow-y-auto py-4"
             style={{ backgroundColor: theme.background }}
             ref={messageListRef}
           >
