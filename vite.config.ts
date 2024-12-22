@@ -20,8 +20,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor': ['react', 'react-dom', 'zustand'],
-          'ui': ['./src/components/ui/**/*.tsx'],
+          // todo: add more
+          'vendor': ['react', 'react-dom', 'zustand']
         }
       }
     },

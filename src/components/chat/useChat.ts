@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Message } from "@/store.ts";
-import { useChatStore, useModelStore } from "@/store.ts";
+import { Message, useChatStore } from "../../store";
 
 export function useChat() {
   // TODO: fix
-  const { config } = useModelStore();
+  // const { config } = useModelStore();
   const { 
     messages, 
     currentConversationId,
@@ -24,7 +23,9 @@ export function useChat() {
   } | null>(null);
   const [lastAttemptedMessage, setLastAttemptedMessage] = useState<string>("");
   // TODO: fix
-  const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+  // const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+  const [_, setRetryingMessageId] = useState<string | null>(null);
+
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,15 +37,22 @@ export function useChat() {
         setIsLoading(true);
         setError(null);
         
+        let loadedMessages: Message[];
         if (currentConversationId) {
-          const messages = await invoke<Message[]>("load_conversation_messages", {
+          console.log("Loading messages for conversation ID:", currentConversationId);
+          loadedMessages = await invoke<Message[]>("load_conversation_messages", {
             conversationId: parseInt(currentConversationId, 10)
           });
-          setMessages(messages);
         } else {
-          const messages = await invoke<Message[]>("get_chat_history");
-          setMessages(messages);
+          // When no conversation exists, get_chat_history will create one
+          loadedMessages = await invoke<Message[]>("get_chat_history");
+          // Get the latest conversation ID after chat history is loaded
+          const conversations = await invoke<{id: number}[]>("get_conversations");
+          if (conversations && conversations.length > 0) {
+            setCurrentConversationId(conversations[0].id.toString());
+          }
         }
+        setMessages(loadedMessages);
       } catch (error: any) {
         console.error("Error loading messages:", error);
         setError({
@@ -135,29 +143,32 @@ export function useChat() {
       });
 
       // After successful processing, reload messages to get proper DB IDs
+      let updatedMessages: Message[];
       if (currentConversationId) {
-        const messages = await invoke<Message[]>("load_conversation_messages", {
+        updatedMessages = await invoke<Message[]>("load_conversation_messages", {
           conversationId: parseInt(currentConversationId, 10)
         });
-        setMessages(messages);
       } else {
-        const messages = await invoke<Message[]>("get_chat_history");
-        setMessages(messages);
+        updatedMessages = await invoke<Message[]>("get_chat_history");
+        // Get the latest conversation ID after chat history is loaded
+        const conversations = await invoke<{id: number}[]>("get_conversations");
+        if (conversations && conversations.length > 0) {
+          setCurrentConversationId(conversations[0].id.toString());
+        }
       }
+      setMessages(updatedMessages);
 
-      if (!streamingEnabled && response && response.reply) {
-        if (existingMessageId) {
-          const messageIndex = messages.findIndex(
-            (msg) => msg.id === existingMessageId
-          );
-          if (messageIndex !== -1) {
-            const updatedMessages = [...messages];
-            updatedMessages[messageIndex] = {
-              ...updatedMessages[messageIndex],
-              content: response.reply,
-            };
-            setMessages(updatedMessages);
-          }
+      if (!streamingEnabled && response && response.reply && existingMessageId) {
+        const messageIndex = updatedMessages.findIndex(
+          (msg: Message) => msg.id === existingMessageId
+        );
+        if (messageIndex !== -1) {
+          const newMessages = [...updatedMessages];
+          newMessages[messageIndex] = {
+            ...newMessages[messageIndex],
+            content: response.reply,
+          };
+          setMessages(newMessages);
         }
       }
     } catch (error: any) {
