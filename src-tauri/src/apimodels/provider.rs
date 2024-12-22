@@ -11,6 +11,7 @@ pub struct Message {
     #[serde(default)]
     pub reactions: Option<MessageReactions>,
     pub model: Option<String>, // Add model field
+    pub original_message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -55,8 +55,14 @@ pub async fn process_message(
     // Short transaction for user message
     {
         let mut tx = db.begin().await.map_err(chat::db_error)?;
-        let user_message =
-            chat::save_message(&mut tx, conversation_id, "user", &message, None).await?;
+        let user_message = chat::save_message(
+            &mut tx,
+            conversation_id,
+            "user",
+            &message,
+            None,
+            None  // No original message ID for new messages
+        ).await?;
         tx.commit().await.map_err(chat::db_error)?;
 
         {
@@ -65,7 +71,7 @@ pub async fn process_message(
         }
     }
 
-    // Call provider outside of a transaction to avoid holding DB locks
+    // Call provider outside a transaction to avoid holding DB locks
     let provider = ProviderFactory::create_provider(&provider_type, provider_config.clone())
         .map_err(|e| ErrorResponse {
             message: "Provider initialization failed".to_string(),
@@ -112,8 +118,9 @@ pub async fn process_message(
             "assistant",
             &full_response,
             Some(&provider_config.model),
+            None  // No original message ID for new messages
         )
-        .await?;
+            .await?;
         tx.commit().await.map_err(chat::db_error)?;
 
         {
@@ -145,7 +152,7 @@ pub async fn get_chat_history(
     }
 
     // If empty, load from DB
-    let messages = chat::get_messages_for_conversation_cached(db, conversation_id).await?;
+    let messages = chat::get_messages_for_conversation(db, conversation_id).await?;
 
     {
         let mut history = chat_history.0.lock();

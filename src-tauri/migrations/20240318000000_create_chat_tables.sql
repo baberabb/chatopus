@@ -13,7 +13,10 @@ CREATE TABLE IF NOT EXISTS conversations (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     model_id TEXT,
     settings TEXT,  -- JSON string for conversation settings
-    FOREIGN KEY (model_id) REFERENCES models(id)
+    parent_id INTEGER,  -- Points to original conversation
+    version INTEGER NOT NULL DEFAULT 1,  -- Tracks version number
+    FOREIGN KEY (model_id) REFERENCES models(id),
+    FOREIGN KEY (parent_id) REFERENCES conversations(id)
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -23,7 +26,10 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     metadata TEXT,  -- JSON string for any additional metadata
-    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+    original_message_id INTEGER,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (original_message_id) REFERENCES messages(id)
+
 );
 
 -- Index for faster message retrieval
@@ -36,3 +42,7 @@ ON conversations(updated_at);
 
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at 
 ON messages(conversation_id, created_at);
+
+-- New indexes for versioning
+CREATE INDEX IF NOT EXISTS idx_conversations_parent
+    ON conversations(parent_id);
