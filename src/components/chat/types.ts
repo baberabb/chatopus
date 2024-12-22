@@ -7,6 +7,7 @@ export interface Message {
   reactions?: {
     thumbsUp: number;
   };
+  isEditing?: boolean;
 }
 
 export interface ArchivedChat {

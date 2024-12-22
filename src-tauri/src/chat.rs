@@ -3,6 +3,7 @@ use crate::config::ConfigState;
 use crate::database::chat::{self, ConversationInfo, ConversationRow, DbMessage, ErrorResponse};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 
@@ -212,6 +213,21 @@ pub async fn load_conversation_messages(
     }
 
     Ok(messages)
+}
+
+#[tauri::command]
+pub async fn edit_message(
+    message_id: String,
+    new_content: String,
+    app_handle: AppHandle,
+) -> Result<(), ErrorResponse> {
+    println!(
+        "Edit message request - ID: {}, New content: {}",
+        message_id, new_content
+    );
+
+    // Dummy implementation - you can implement the actual database update logic
+    Ok(())
 }
 
 #[tauri::command]

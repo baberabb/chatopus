@@ -25,6 +25,7 @@ export function useChat() {
   const [lastAttemptedMessage, setLastAttemptedMessage] = useState<string>("");
   // TODO: fix
   const [retryingMessageId, setRetryingMessageId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -173,6 +174,66 @@ export function useChat() {
     }
   };
 
+  const handleEdit = async (messageId: string, newContent: string) => {
+    try {
+      setError(null);
+      
+      // If messageId matches editingMessageId, this is a save operation
+      // Otherwise, this is toggling edit mode
+      if (messageId === editingMessageId) {
+        // Update message in UI immediately
+        const messageIndex = messages.findIndex(msg => msg.id === messageId);
+        if (messageIndex !== -1) {
+          const updatedMessages = [...messages];
+          updatedMessages[messageIndex] = {
+            ...updatedMessages[messageIndex],
+            content: newContent,
+            isEditing: false
+          };
+          setMessages(updatedMessages);
+        }
+        
+        // Call backend to update message
+        await invoke("edit_message", {
+          messageId,
+          newContent
+        });
+
+        setEditingMessageId(null);
+      } else {
+        // Toggle edit mode
+        const messageIndex = messages.findIndex(msg => msg.id === messageId);
+        if (messageIndex !== -1) {
+          const updatedMessages = [...messages];
+          updatedMessages[messageIndex] = {
+            ...updatedMessages[messageIndex],
+            isEditing: true
+          };
+          setMessages(updatedMessages);
+        }
+        setEditingMessageId(messageId);
+      }
+    } catch (error: any) {
+      console.error("Error editing message:", error);
+      setError({
+        message: "Failed to edit message",
+        details: error?.message
+      });
+      
+      // Revert UI state on error
+      const messageIndex = messages.findIndex(msg => msg.id === messageId);
+      if (messageIndex !== -1) {
+        const updatedMessages = [...messages];
+        updatedMessages[messageIndex] = {
+          ...updatedMessages[messageIndex],
+          isEditing: false
+        };
+        setMessages(updatedMessages);
+      }
+      setEditingMessageId(null);
+    }
+  };
+
   const clearChat = async () => {
     try {
       await invoke("clear_chat_history");
@@ -198,6 +259,8 @@ export function useChat() {
     processMessage,
     clearChat,
     setMessages,
-    setCurrentConversationId
+    setCurrentConversationId,
+    handleEdit,
+    editingMessageId
   };
 }

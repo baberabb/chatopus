@@ -21,6 +21,7 @@ export function ChatContainer() {
     lastAttemptedMessage,
     setLastAttemptedMessage,
     processMessage,
+    handleEdit,
     // clearChat,
   } = useChat();
 
@@ -104,6 +105,7 @@ export function ChatContainer() {
                   <MessageBlock
                     message={msg}
                     onReact={handleReact}
+                    onEdit={handleEdit}
                     isStreaming={isStreaming && index === messages.length - 1}
                   />
                 </React.Fragment>
