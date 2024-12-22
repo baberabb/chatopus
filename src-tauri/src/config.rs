@@ -10,6 +10,26 @@ pub struct ProviderSettings {
     pub model: String,
     pub max_tokens: u32,
     pub streaming: bool,
+    #[serde(default)]
+    pub api_version: Option<String>,
+    #[serde(default)]
+    pub base_url: Option<String>,
+    #[serde(default = "default_timeout_seconds")]
+    pub timeout_seconds: Option<u64>,
+    #[serde(default = "default_retry_attempts")]
+    pub retry_attempts: Option<u32>,
+    #[serde(default)]
+    pub additional_headers: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub additional_params: Option<HashMap<String, serde_json::Value>>,
+}
+
+fn default_timeout_seconds() -> Option<u64> {
+    Some(120)
+}
+
+fn default_retry_attempts() -> Option<u32> {
+    Some(3)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -28,6 +48,12 @@ impl Default for AppConfig {
                 model: "claude-3-5-sonnet-20240620".to_string(),
                 max_tokens: 1024,
                 streaming: true,
+                api_version: None,
+                base_url: None,
+                timeout_seconds: Some(120),
+                retry_attempts: Some(3),
+                additional_headers: None,
+                additional_params: None,
             },
         );
 

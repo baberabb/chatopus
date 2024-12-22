@@ -1,6 +1,12 @@
-use crate::apimodels::{Message, ProviderConfig, ProviderFactory, StreamResponse};
+use crate::apimodels::{
+    config::{ProviderConfig, RequestConfig},
+    error::ProviderError,
+    provider::ProviderFactory,
+    types::{Message, StreamResponse},
+};
 use crate::config::ConfigState;
-use crate::database::chat::{self, ConversationInfo, ConversationRow, DbMessage, ErrorResponse};
+use crate::database::chat::ErrorResponse;
+use crate::database::chat::{self, ConversationInfo, ConversationRow, DbMessage};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -47,6 +53,12 @@ pub async fn process_message(
                 api_key: provider_settings.api_key.clone(),
                 model: provider_settings.model.clone(),
                 max_tokens: provider_settings.max_tokens,
+                api_version: provider_settings.api_version.clone(),
+                base_url: provider_settings.base_url.clone(),
+                timeout_seconds: provider_settings.timeout_seconds,
+                retry_attempts: provider_settings.retry_attempts,
+                additional_headers: provider_settings.additional_headers.clone(),
+                additional_params: provider_settings.additional_params.clone(),
             },
             provider_settings.streaming,
         )
@@ -61,8 +73,9 @@ pub async fn process_message(
             "user",
             &message,
             None,
-            None  // No original message ID for new messages
-        ).await?;
+            None, // No original message ID for new messages
+        )
+        .await?;
         tx.commit().await.map_err(chat::db_error)?;
 
         {
@@ -72,11 +85,15 @@ pub async fn process_message(
     }
 
     // Call provider outside a transaction to avoid holding DB locks
-    let provider = ProviderFactory::create_provider(&provider_type, provider_config.clone())
-        .map_err(|e| ErrorResponse {
-            message: "Provider initialization failed".to_string(),
-            details: Some(e),
-        })?;
+    let provider = match ProviderFactory::create_provider(&provider_type, provider_config.clone()) {
+        Ok(p) => p,
+        Err(e) => {
+            return Err(ErrorResponse {
+                message: "Provider initialization failed".to_string(),
+                details: Some(e.to_string()),
+            });
+        }
+    };
 
     let history_snapshot = {
         // Lock once for reading
@@ -92,21 +109,45 @@ pub async fn process_message(
             }
         }) as Box<dyn Fn(StreamResponse) + Send + Sync + 'static>;
 
-        provider
-            .send_message(history_snapshot, Some(callback))
+        match provider
+            .send_message(
+                history_snapshot,
+                Some(callback),
+                Some(RequestConfig {
+                    streaming: true,
+                    ..Default::default()
+                }),
+            )
             .await
-            .map_err(|e| ErrorResponse {
-                message: "API request failed".to_string(),
-                details: Some(e),
-            })?
+        {
+            Ok(response) => response,
+            Err(e) => {
+                return Err(ErrorResponse {
+                    message: "API request failed".to_string(),
+                    details: Some(e.to_string()),
+                });
+            }
+        }
     } else {
-        provider
-            .send_message(history_snapshot, None)
+        match provider
+            .send_message(
+                history_snapshot,
+                None,
+                Some(RequestConfig {
+                    streaming: false,
+                    ..Default::default()
+                }),
+            )
             .await
-            .map_err(|e| ErrorResponse {
-                message: "API request failed".to_string(),
-                details: Some(e),
-            })?
+        {
+            Ok(response) => response,
+            Err(e) => {
+                return Err(ErrorResponse {
+                    message: "API request failed".to_string(),
+                    details: Some(e.to_string()),
+                });
+            }
+        }
     };
 
     // Short transaction for assistant message
@@ -118,9 +159,9 @@ pub async fn process_message(
             "assistant",
             &full_response,
             Some(&provider_config.model),
-            None  // No original message ID for new messages
+            None, // No original message ID for new messages
         )
-            .await?;
+        .await?;
         tx.commit().await.map_err(chat::db_error)?;
 
         {
