@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { initializeStore, themes } from './store/initStore';
-import { Theme, ThemeType, ModelConfig, ProviderSettings } from './types';
+import { Theme, ThemeType, ModelConfig, ProviderSettings, ProviderType } from './types';
 
 interface ThemeStore {
   themeType: ThemeType;
@@ -25,8 +25,8 @@ interface ModelStore {
   config: ModelConfig;
   initialized: boolean;
   setConfig: (config: ModelConfig) => void;
-  updateProviderSettings: (provider: string, settings: ProviderSettings) => void;
-  setActiveProvider: (provider: string) => void;
+  updateProviderSettings: (provider: ProviderType, settings: ProviderSettings) => void;
+  setActiveProvider: (provider: ProviderType) => void;
 }
 
 export interface Message {
@@ -103,8 +103,50 @@ export const useChatStore = create<ChatStore>((set) => ({
 
 export const useModelStore = create<ModelStore>((set) => ({
   config: {
-    active_provider: "",
-    providers: {}
+    active_provider: "anthropic" as ProviderType,
+    providers: {
+      anthropic: {
+        api_key: "",
+        model: "claude-3-sonnet-20240320",
+        parameters: {
+          max_tokens: 1024,
+          streaming: true,
+          temperature: 0.7,
+          top_p: 1,
+          top_k: 5
+        },
+        customParameters: {},
+      },
+      openai: {
+        api_key: "",
+        model: "gpt-4-turbo-preview",
+        parameters: {
+          max_tokens: 1024,
+          streaming: true,
+          temperature: 0.7,
+          top_p: 1,
+          presence_penalty: 0,
+          frequency_penalty: 0,
+          tool_calls: false,
+          tool_choice: "none"
+        },
+        customParameters: {},
+      },
+      openrouter: {
+        api_key: "",
+        model: "anthropic/claude-3-opus",
+        parameters: {
+          max_tokens: 1024,
+          streaming: true,
+          temperature: 0.7,
+          top_p: 1,
+          top_k: 5,
+          presence_penalty: 0,
+          frequency_penalty: 0
+        },
+        customParameters: {},
+      },
+    } as Record<ProviderType, ProviderSettings>
   },
   initialized: false,
   setConfig: (config) => {

@@ -9,18 +9,54 @@ export interface Theme {
   shadowColor: string;
 }
 
+export type ParameterType = "number" | "boolean" | "select" | "string";
+
+export interface ParameterConfig {
+  type: ParameterType;
+  label: string;
+  description?: string;
+  default: any;
+  validation?: {
+    min?: number;
+    max?: number;
+    step?: number;
+    options?: string[];
+  };
+}
+
+export interface ProviderConfig {
+  name: string;
+  models: string[];
+  parameters: Record<string, ParameterConfig>;
+  customParameters?: Record<string, ParameterConfig>;
+}
+
 export interface ProviderSettings {
   api_key: string;
   model: string;
-  max_tokens: number;
-  streaming: boolean;
+  parameters: Record<string, any>;
+  customParameters?: Record<string, any>;
 }
 
-export interface ModelConfig {
-  active_provider: string;
-  providers: {
-    [key: string]: ProviderSettings;
+export interface CustomParameterFormData {
+  name: string;
+  type: ParameterType;
+  label: string;
+  description?: string;
+  default: any;
+  validation?: {
+    min?: number;
+    max?: number;
+    step?: number;
+    options?: string[];
   };
+}
+
+export type ProviderType = "anthropic" | "openai" | "openrouter";
+
+export interface ModelConfig {
+  active_provider: ProviderType;
+  providers: Record<ProviderType, ProviderSettings>;
 }
 
 export interface Reaction {
@@ -40,11 +76,6 @@ export interface MessageBlockProps {
   onReact: (messageId: number, reactionType: keyof Reaction) => void;
   isStreaming: boolean;
 }
-
-// export interface MessageBlockProps {
-//   message: Message;
-//   onReact: (messageId: number, reactionType: keyof Reaction) => void;
-// }
 
 export interface MessageListProps {
   messages: Message[];
