@@ -123,6 +123,9 @@ pub async fn process_message(
         let window = window.clone();
         let callback = Box::new(move |response: StreamResponse| {
             if !response.text.is_empty() {
+                #[cfg(debug_assertions)]
+                dbg!(&response.text);
+
                 let _ = window.emit("stream-response", &response.text);
             }
         }) as Box<dyn Fn(StreamResponse) + Send + Sync + 'static>;

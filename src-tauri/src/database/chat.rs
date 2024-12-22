@@ -18,8 +18,8 @@ pub struct ConversationInfo {
     pub model: String,
     pub message_count: i64,
     pub timestamp: String,
-    pub parent_id: Option<i64>,  // Added for versioning
-    pub version: i64,            // Added for versioning
+    pub parent_id: Option<i64>, // Added for versioning
+    pub version: i64,           // Added for versioning
 }
 
 // Database models
@@ -31,7 +31,7 @@ pub struct DbMessage {
     pub content: String,
     pub created_at: String,
     pub metadata: Option<String>,
-    pub original_message_id: Option<i64>,  // Added for versioning
+    pub original_message_id: Option<i64>, // Added for versioning
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -41,9 +41,9 @@ pub struct ConversationRow {
     pub preview: String, // COALESCE ensures non-null
     pub model: String,   // COALESCE ensures non-null
     pub message_count: i64,
-    pub timestamp: String, // COALESCE ensures non-null
-    pub parent_id: Option<i64>,  // Added for versioning
-    pub version: i64,            // Added for versioning
+    pub timestamp: String,      // COALESCE ensures non-null
+    pub parent_id: Option<i64>, // Added for versioning
+    pub version: i64,           // Added for versioning
 }
 
 impl From<DbMessage> for Message {
@@ -173,12 +173,12 @@ pub async fn get_messages_for_conversation(
         "#,
         conversation_id
     )
-        .fetch_all(db)
-        .await
-        .map_err(db_error)?
-        .into_iter()
-        .map(Message::from)
-        .collect::<Vec<Message>>();
+    .fetch_all(db)
+    .await
+    .map_err(db_error)?
+    .into_iter()
+    .map(Message::from)
+    .collect::<Vec<Message>>();
 
     Ok(messages)
 }
@@ -232,9 +232,9 @@ pub async fn get_all_conversations(
         ORDER BY c.updated_at DESC
         "#
     )
-        .fetch_all(db)
-        .await
-        .map_err(db_error)?;
+    .fetch_all(db)
+    .await
+    .map_err(db_error)?;
 
     Ok(conversations
         .into_iter()
@@ -274,7 +274,7 @@ pub async fn save_message(
     role: &str,
     content: &str,
     model: Option<&str>,
-    original_message_id: Option<i64>,  // Added this parameter
+    original_message_id: Option<i64>, // Added this parameter
 ) -> Result<Message, ErrorResponse> {
     // Update conversation timestamp
     sqlx::query!(
@@ -285,9 +285,9 @@ pub async fn save_message(
         "#,
         conversation_id
     )
-        .execute(&mut **tx)
-        .await
-        .map_err(db_error)?;
+    .execute(&mut **tx)
+    .await
+    .map_err(db_error)?;
 
     // Create metadata JSON if model is provided
     let metadata = model.map(|m| format!(r#"{{"model":"{}"}}"#, m));
@@ -342,12 +342,12 @@ pub async fn create_conversation_version(
         "#,
         parent_id
     )
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(db_error)?;
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_error)?;
 
     let new_version = parent.version + 1;
-    
+
     // Create new version
     let result = sqlx::query!(
         r#"
@@ -366,9 +366,9 @@ pub async fn create_conversation_version(
         parent.model_id,
         parent.settings,
     )
-        .execute(&mut **tx)
-        .await
-        .map_err(db_error)?;
+    .execute(&mut **tx)
+    .await
+    .map_err(db_error)?;
 
     Ok(result.last_insert_rowid())
 }

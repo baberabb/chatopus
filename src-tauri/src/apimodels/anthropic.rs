@@ -1,8 +1,9 @@
 use async_trait::async_trait;
-use futures_util::{FutureExt, StreamExt};
+use futures_util::{FutureExt, StreamExt, pin_mut};
 use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
+use bytes::Bytes;
 
 use super::config::{ProviderConfig, RequestConfig};
 use super::error::{ProviderError, ProviderResult};
@@ -11,10 +12,8 @@ use super::types::{ChatRequest, ChatResponse, Message, StreamCallback, StreamRes
 
 const DEFAULT_API_VERSION: &str = "2023-06-01";
 const INITIAL_BUFFER_SIZE: usize = 1024;
-
-pub struct AnthropicProvider {
-    base: BaseProvider,
-}
+const RESPONSE_BUFFER_SIZE: usize = 4096;
+const API_ENDPOINT: &str = "https://api.anthropic.com/v1/messages";
 
 #[derive(Serialize)]
 struct AnthropicMessage {
@@ -52,32 +51,35 @@ struct ContentBlock {
     text: String,
 }
 
+pub struct AnthropicProvider {
+    base: BaseProvider,
+}
+
 impl AnthropicProvider {
+    #[inline]
     pub fn new(config: ProviderConfig) -> Self {
         Self {
             base: BaseProvider::new(config),
         }
     }
 
+    #[inline]
     fn convert_messages(messages: Vec<Message>) -> Vec<AnthropicMessage> {
-        let mut anthropic_messages = Vec::with_capacity(INITIAL_BUFFER_SIZE);
-        for msg in messages {
-            anthropic_messages.push(AnthropicMessage {
+        messages.into_iter()
+            .map(|msg| AnthropicMessage {
                 role: msg.role,
                 content: msg.content,
-            });
-        }
-        anthropic_messages
+            })
+            .collect()
     }
 
     fn create_headers(config: &ProviderConfig) -> HeaderMap {
-        let mut headers = HeaderMap::new();
+        let mut headers = HeaderMap::with_capacity(3);
         headers.insert("Content-Type", "application/json".parse().unwrap());
         headers.insert("X-API-Key", config.api_key.parse().unwrap());
         headers.insert(
             "anthropic-version",
-            config
-                .api_version
+            config.api_version
                 .as_deref()
                 .unwrap_or(DEFAULT_API_VERSION)
                 .parse()
@@ -86,71 +88,71 @@ impl AnthropicProvider {
         headers
     }
 
-    fn handle_cancellation(
-        callback: &StreamCallback,
-        full_response: &str,
-    ) -> Option<Result<bytes::Bytes, reqwest::Error>> {
-        callback(StreamResponse {
-            text: format!("{}\n[Cancelled]", full_response),
-            is_done: true,
-        });
-        None
+    async fn make_request(&self, request: &AnthropicRequest) -> ProviderResult<reqwest::Response> {
+        self.base
+            .client
+            .post(API_ENDPOINT)
+            .headers(Self::create_headers(&self.base.config))
+            .json(request)
+            .send()
+            .await
+            .map_err(|e| ProviderError::RequestError(e.to_string()))
     }
 
-    fn process_buffer(
-        buffer: &mut String,
+    fn process_chunk(
+        chunk: &[u8],
+        buffer: &mut Vec<u8>,
         full_response: &mut String,
         callback: &StreamCallback,
-    ) -> ProviderResult<Option<String>> {
-        while let Some(end_index) = buffer.find('\n') {
-            let line = buffer[..end_index].trim().to_string();
+    ) -> ProviderResult<bool> {
+        buffer.extend_from_slice(chunk);
+
+        let mut is_complete = false;
+        while let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+            let line = String::from_utf8_lossy(&buffer[..pos]).trim().to_string();
+            buffer.drain(..=pos);
+
+            #[cfg(debug_assertions)]
             eprintln!("ANTHROPIC RAW LINE: {}", &line);
 
             if let Some(data) = line.strip_prefix("data: ") {
+                #[cfg(debug_assertions)]
                 eprintln!("ANTHROPIC EVENT DATA: {}", &data);
+
                 if data == "[DONE]" {
-                    callback(StreamResponse {
-                        text: String::new(),
-                        is_done: true,
-                    });
-                    buffer.drain(..=end_index);
-                    return Ok(Some(full_response.clone()));
+                    callback(StreamResponse::done());
+                    is_complete = true;
+                    break;
                 }
 
                 if let Ok(event_data) = serde_json::from_str::<EventData>(data) {
                     if let Some(text) = event_data.delta.and_then(|d| d.text) {
                         full_response.push_str(&text);
-                        callback(StreamResponse {
-                            text,
-                            is_done: false,
-                        });
+                        callback(StreamResponse::new(text));
                     }
 
                     if event_data.event_type == "content_block_stop" {
-                        callback(StreamResponse {
-                            text: String::new(),
-                            is_done: true,
-                        });
-                        buffer.drain(..=end_index);
-                        return Ok(Some(full_response.clone()));
+                        callback(StreamResponse::done());
+                        is_complete = true;
+                        break;
                     }
                 }
             }
-            buffer.drain(..=end_index);
         }
-        Ok(None)
+        Ok(is_complete)
     }
 }
 
 #[async_trait]
 impl ChatProvider for AnthropicProvider {
+    #[inline]
     fn supports_streaming(&self) -> bool {
         true
     }
 
     async fn prepare_request(&self, messages: Vec<Message>, config: &RequestConfig) -> ChatRequest {
         ChatRequest {
-            messages: messages.clone(),
+            messages,
             model: self.base.config.model.clone(),
             max_tokens: self.base.config.max_tokens,
             stream: config.streaming,
@@ -165,45 +167,39 @@ impl ChatProvider for AnthropicProvider {
         mut cancel_token: broadcast::Receiver<()>,
     ) -> ProviderResult<String> {
         let anthropic_request = AnthropicRequest {
-            model: request.model.clone(),
+            model: request.model,
             messages: Self::convert_messages(request.messages),
             max_tokens: request.max_tokens,
             stream: true,
         };
 
-        // Pre-allocate strings with reasonable capacity
-        let mut full_response = String::with_capacity(4096);
-        let mut buffer = String::with_capacity(1024);
+        let mut full_response = String::with_capacity(RESPONSE_BUFFER_SIZE);
+        let mut buffer = Vec::with_capacity(INITIAL_BUFFER_SIZE);
 
-        // Create the request once and reuse headers
-        let response = self
-            .base
-            .client
-            .post("https://api.anthropic.com/v1/messages")
-            .headers(Self::create_headers(&self.base.config))
-            .json(&anthropic_request)
-            .send()
-            .await
-            .map_err(|e| ProviderError::RequestError(e.to_string()))?;
-
+        let response = self.make_request(&anthropic_request).await?;
         let response = BaseProvider::handle_response_error(response).await?;
-        let mut stream = response.bytes_stream();
 
-        while let Some(item) = futures_util::select! {
-            item = stream.next().fuse() => item,
-            _ = cancel_token.recv().fuse() => {
-                Self::handle_cancellation(&callback, &full_response)
-            }
-        } {
-            let chunk = item.map_err(|e| ProviderError::RequestError(e.to_string()))?;
-            let chunk_str = String::from_utf8_lossy(&chunk);
-            eprintln!("ANTHROPIC RAW CHUNK: {}", &chunk_str);
-            buffer.push_str(&chunk_str);
+        let stream = response.bytes_stream();
+        pin_mut!(stream);
 
-            if let Some(remainder) =
-                Self::process_buffer(&mut buffer, &mut full_response, &callback)?
-            {
-                return Ok(remainder);
+        loop {
+            let chunk = futures_util::select! {
+                chunk = stream.next().fuse() => match chunk {
+                    Some(Ok(chunk)) => chunk,
+                    Some(Err(e)) => return Err(ProviderError::RequestError(e.to_string())),
+                    None => break,
+                },
+                _ = cancel_token.recv().fuse() => {
+                    callback(StreamResponse::cancelled());
+                    return Ok(format!("{}\n[Cancelled]", full_response));
+                }
+            };
+
+            #[cfg(debug_assertions)]
+            eprintln!("ANTHROPIC RAW CHUNK: {}", String::from_utf8_lossy(&chunk));
+
+            if Self::process_chunk(&chunk, &mut buffer, &mut full_response, &callback)? {
+                break;
             }
         }
 
@@ -218,38 +214,49 @@ impl ChatProvider for AnthropicProvider {
             stream: false,
         };
 
-        let response = self
-            .base
-            .client
-            .post("https://api.anthropic.com/v1/messages")
-            .headers(Self::create_headers(&self.base.config))
-            .json(&anthropic_request)
-            .send()
-            .await
-            .map_err(|e| ProviderError::RequestError(e.to_string()))?;
+        let response = BaseProvider::handle_response_error(self.make_request(&anthropic_request).await?).await?;
 
-        let response = BaseProvider::handle_response_error(response).await?;
-
-        let response_data = response
-            .json::<NonStreamingResponse>()
+        let response_data: NonStreamingResponse = response
+            .json()
             .await
             .map_err(|e| ProviderError::ParseError(e.to_string()))?;
 
-        let mut content = String::with_capacity(
-            response_data
-                .content
-                .iter()
-                .map(|block| block.text.len())
-                .sum(),
-        );
-        for block in response_data.content {
-            content.push_str(&block.text);
-        }
+        let content = response_data.content
+            .into_iter()
+            .map(|block| block.text)
+            .collect::<String>();
 
         Ok(ChatResponse {
             content,
             model: Some(request.model),
-            usage: None, // Anthropic doesn't provide token usage info in this format
+            usage: None,
         })
+    }
+}
+
+// Helper implementations
+impl StreamResponse {
+    #[inline]
+    fn new(text: String) -> Self {
+        Self {
+            text,
+            is_done: false,
+        }
+    }
+
+    #[inline]
+    fn done() -> Self {
+        Self {
+            text: String::new(),
+            is_done: true,
+        }
+    }
+
+    #[inline]
+    fn cancelled() -> Self {
+        Self {
+            text: "\n[Cancelled]".into(),
+            is_done: true,
+        }
     }
 }
