@@ -10,10 +10,11 @@ interface MessageBlockProps {
   onReact: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
   isStreaming: boolean;
+  conversationId: string | null;
 }
 
 export const MessageBlock: React.FC<MessageBlockProps> = React.memo(
-  ({ message, onReact, onEdit, isStreaming }) => {
+  ({ message, onReact, onEdit, isStreaming, conversationId }) => {
     const { theme } = useZustandTheme();
     const [isHovered, setIsHovered] = useState(false);
     const [editContent, setEditContent] = useState(message.content);
@@ -137,7 +138,8 @@ export const MessageBlock: React.FC<MessageBlockProps> = React.memo(
       prevProps.message.reactions?.thumbsUp ===
         nextProps.message.reactions?.thumbsUp &&
       prevProps.isStreaming === nextProps.isStreaming &&
-      prevProps.message.isEditing === nextProps.message.isEditing
+      prevProps.message.isEditing === nextProps.message.isEditing &&
+      prevProps.conversationId === nextProps.conversationId
     );
   }
 );
