@@ -10,6 +10,7 @@ import { MessageBlock } from "./MessageBlock";
 import { useChat } from "./useChat";
 import { JupyterConnect } from "../JupyterConnect";
 import { logger } from "../../utils/logger";
+import { scrollToBottom } from "./utils";
 
 interface StreamingInputProps {
   onSend: (content: string) => Promise<void>;
@@ -64,6 +65,8 @@ export function ChatContainer() {
   const { theme } = useZustandTheme();
   const { currentModel } = useModel();
   const messageListRef = useRef<HTMLDivElement>(null);
+  const streaming = useStreaming();
+  const isStreaming = streaming.isStreaming();
 
   const {
     messages,
@@ -74,6 +77,22 @@ export function ChatContainer() {
     handleEdit,
     cancelMessage,
   } = useChat();
+
+  // Get the latest message content for scroll tracking
+  const latestMessageContent = messages[messages.length - 1]?.content || "";
+
+  // Scroll to bottom when messages change or during streaming
+  useEffect(() => {
+    if (isStreaming) {
+      // Smooth scroll during streaming
+      scrollToBottom(messageListRef.current, true);
+    } else {
+      // Instant scroll for user messages, smooth for assistant
+      const isLatestMessageFromUser =
+        messages[messages.length - 1]?.role === "user";
+      scrollToBottom(messageListRef.current, !isLatestMessageFromUser);
+    }
+  }, [messages.length, latestMessageContent, isStreaming]);
 
   const handleReact = (messageId: number) => {
     // TODO: Implement reaction persistence

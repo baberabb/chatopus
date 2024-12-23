@@ -75,3 +75,18 @@ export const createTempMessage = (content: string, role: "user" | "assistant", m
     reactions: { thumbsUp: 0 },
   };
 };
+
+/**
+ * Helper function to scroll chat container to bottom
+ * @param container - The chat container element
+ * @param smooth - Whether to use smooth scrolling
+ */
+export const scrollToBottom = (container: HTMLElement | null, smooth: boolean = true) => {
+  if (!container) return;
+  
+  const scrollHeight = container.scrollHeight;
+  container.scrollTo({
+    top: scrollHeight,
+    behavior: smooth ? 'smooth' : 'auto' as ScrollBehavior
+  });
+};
