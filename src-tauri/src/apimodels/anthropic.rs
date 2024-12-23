@@ -251,8 +251,8 @@ impl ChatProvider for AnthropicProvider {
                 }
             };
 
-            #[cfg(debug_assertions)]
-            eprintln!("ANTHROPIC RAW CHUNK: {}", String::from_utf8_lossy(&chunk));
+            // #[cfg(debug_assertions)]
+            // eprintln!("ANTHROPIC RAW CHUNK: {}", String::from_utf8_lossy(&chunk));
 
             if Self::process_chunk(&chunk, &mut buffer, &mut full_response, &callback)? {
                 break;
