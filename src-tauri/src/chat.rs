@@ -1,12 +1,16 @@
 use crate::apimodels::{
-    config::{ProviderConfig, RequestConfig},
-    error::ProviderError,
-    provider::ProviderFactory,
-    types::{Message, StreamResponse},
+    core::{
+        error::Error,
+        provider::{Provider, ProviderBuilder},
+        request::RequestOptions,
+        types::{Message, StreamResponse},
+        StreamHandler,
+    },
+    get_provider_registry,
 };
 use crate::config::ConfigState;
 use crate::database::chat::ErrorResponse;
-use crate::database::chat::{self, ConversationInfo, ConversationRow, DbMessage};
+use crate::database::chat::{self, ConversationInfo};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -36,6 +40,15 @@ impl From<ErrorResponse> for ProcessMessageError {
     }
 }
 
+impl From<Error> for ProcessMessageError {
+    fn from(error: Error) -> Self {
+        ProcessMessageError {
+            message: "Provider error".to_string(),
+            details: Some(error.to_string()),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ProcessMessageRequest {
     message: String,
@@ -51,6 +64,28 @@ impl Default for CancellationState {
     }
 }
 
+struct StreamEventHandler<R: Runtime> {
+    window: Window<R>,
+}
+
+#[async_trait::async_trait]
+impl<R: Runtime> StreamHandler for StreamEventHandler<R> {
+    async fn handle_chunk(&self, text: String) -> std::result::Result<(), Error> {
+        if let Err(e) = self.window.emit("stream-response", &text) {
+            eprintln!("Failed to emit stream response: {}", e);
+        }
+        Ok(())
+    }
+
+    fn handle_done(&self) {
+        // Nothing to do on completion
+    }
+
+    fn handle_error(&self, error: Error) {
+        eprintln!("Stream error: {:?}", error);
+    }
+}
+
 #[tauri::command]
 pub async fn process_message<R: Runtime>(
     request: ProcessMessageRequest,
@@ -58,22 +93,15 @@ pub async fn process_message<R: Runtime>(
     config_state: State<'_, ConfigState>,
     cancellation_state: State<'_, CancellationState>,
     window: Window<R>,
-) -> Result<Response, ProcessMessageError> {
-    println!(
-        "Processing message: {} for conversation: {:?}",
-        request.message, request.conversation_id
-    );
-
+) -> std::result::Result<Response, ProcessMessageError> {
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
-    // Get or create conversation using the single source of truth
-    let conversation_id = chat::get_or_create_conversation_cached(&app_state)
-        .await
-        .map_err(ProcessMessageError::from)?;
+    // Get or create conversation
+    let conversation_id = chat::get_or_create_conversation_cached(&app_state).await?;
 
-    // Extract provider configuration
-    let (provider_type, provider_config, streaming_enabled) = {
+    // Get provider configuration
+    let (provider_type, api_key, streaming_enabled, model) = {
         let config = config_state.0.lock();
         let provider_settings = config
             .providers
@@ -91,27 +119,14 @@ pub async fn process_message<R: Runtime>(
 
         (
             config.active_provider.clone(),
-            ProviderConfig {
-                api_key: provider_settings.api_key.clone(),
-                model: provider_settings.model.clone(),
-                parameters: provider_settings.parameters.clone(),
-                custom_parameters: provider_settings.custom_parameters.clone(),
-                api_version: provider_settings.api_version.clone(),
-                base_url: provider_settings.base_url.clone(),
-                timeout_seconds: provider_settings.timeout_seconds,
-                retry_attempts: provider_settings.retry_attempts,
-                additional_headers: provider_settings.additional_headers.clone(),
-            },
+            provider_settings.api_key.clone(),
             streaming,
+            provider_settings.model.clone(),
         )
     };
 
     // Save user message
-    let mut tx = db
-        .begin()
-        .await
-        .map_err(chat::db_error)
-        .map_err(ProcessMessageError::from)?;
+    let mut tx = db.begin().await.map_err(chat::db_error)?;
     let user_message = chat::save_message(
         &mut tx,
         conversation_id,
@@ -120,28 +135,17 @@ pub async fn process_message<R: Runtime>(
         None,
         None,
     )
-    .await
-    .map_err(ProcessMessageError::from)?;
-    tx.commit()
-        .await
-        .map_err(chat::db_error)
-        .map_err(ProcessMessageError::from)?;
+    .await?;
+    tx.commit().await.map_err(chat::db_error)?;
 
-    // Initialize provider
-    let provider = match ProviderFactory::create_provider(&provider_type, provider_config.clone()) {
-        Ok(p) => p,
-        Err(e) => {
-            return Err(ProcessMessageError {
-                message: "Provider initialization failed".to_string(),
-                details: Some(e.to_string()),
-            });
-        }
-    };
+    // Get provider registry and create provider
+    let registry = get_provider_registry();
+    let mut builder = ProviderBuilder::new(provider_type.clone(), api_key);
+    builder = builder.with_parameter("model".to_string(), serde_json::json!(model));
+    let provider = registry.create_provider(&provider_type, builder)?;
 
     // Load conversation history
-    let history = chat::get_messages_for_conversation(db, conversation_id)
-        .await
-        .map_err(ProcessMessageError::from)?;
+    let history = chat::get_messages_for_conversation(db, conversation_id).await?;
 
     // Setup cancellation
     let (cancel_tx, cancel_rx) = broadcast::channel(1);
@@ -151,59 +155,34 @@ pub async fn process_message<R: Runtime>(
     }
 
     // Process message
-    let full_response = if provider.supports_streaming() && streaming_enabled {
-        let window = window.clone();
-        let callback = Box::new(move |response: StreamResponse| {
-            if !response.text.is_empty() {
-                window
-                    .emit("stream-response", &response.text)
-                    .unwrap_or_else(|e| {
-                        eprintln!("Failed to emit stream response: {}", e);
-                    });
-            }
-        }) as Box<dyn Fn(StreamResponse) + Send + Sync + 'static>;
+    let full_response = if provider.capabilities().supports_streaming && streaming_enabled {
+        let handler = Box::new(StreamEventHandler {
+            window: window.clone(),
+        });
 
-        match provider
+        provider
             .send_message(
                 history,
-                Some(callback),
-                Some(RequestConfig {
+                Some(handler),
+                Some(RequestOptions {
                     streaming: true,
                     ..Default::default()
                 }),
                 Some(cancel_rx),
             )
-            .await
-        {
-            Ok(response) => response,
-            Err(e) => {
-                return Err(ProcessMessageError {
-                    message: "API request failed".to_string(),
-                    details: Some(e.to_string()),
-                });
-            }
-        }
+            .await?
     } else {
-        match provider
+        provider
             .send_message(
                 history,
                 None,
-                Some(RequestConfig {
+                Some(RequestOptions {
                     streaming: false,
                     ..Default::default()
                 }),
                 None,
             )
-            .await
-        {
-            Ok(response) => response,
-            Err(e) => {
-                return Err(ProcessMessageError {
-                    message: "API request failed".to_string(),
-                    details: Some(e.to_string()),
-                });
-            }
-        }
+            .await?
     };
 
     // Save assistant message
@@ -213,15 +192,11 @@ pub async fn process_message<R: Runtime>(
         conversation_id,
         "assistant",
         &full_response,
-        Some(&provider_config.model),
+        Some(&provider_type),
         None,
     )
-    .await
-    .map_err(ProcessMessageError::from)?;
-    tx.commit()
-        .await
-        .map_err(chat::db_error)
-        .map_err(ProcessMessageError::from)?;
+    .await?;
+    tx.commit().await.map_err(chat::db_error)?;
 
     // Clear cancellation
     {
@@ -230,11 +205,9 @@ pub async fn process_message<R: Runtime>(
     }
 
     // Send completion event
-    window
-        .emit("stream-complete", &assistant_message.id)
-        .unwrap_or_else(|e| {
-            eprintln!("Failed to emit stream complete: {}", e);
-        });
+    if let Err(e) = window.emit("stream-complete", &assistant_message.id) {
+        eprintln!("Failed to emit stream complete: {}", e);
+    }
 
     Ok(Response {
         reply: full_response,
@@ -245,19 +218,23 @@ pub async fn process_message<R: Runtime>(
 }
 
 #[tauri::command]
-pub async fn get_chat_history(app_handle: AppHandle) -> Result<Vec<Message>, ErrorResponse> {
+pub async fn get_chat_history(app_handle: AppHandle) -> std::result::Result<Vec<Message>, String> {
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
-    let conversation_id = chat::get_or_create_conversation_cached(&app_state).await?;
-    chat::get_messages_for_conversation(db, conversation_id).await
+    let conversation_id = chat::get_or_create_conversation_cached(&app_state)
+        .await
+        .map_err(|e| e.message)?;
+    chat::get_messages_for_conversation(db, conversation_id)
+        .await
+        .map_err(|e| e.message)
 }
 
 #[tauri::command]
-pub async fn clear_chat_history(app_handle: AppHandle) -> Result<i64, ErrorResponse> {
+pub async fn clear_chat_history(app_handle: AppHandle) -> std::result::Result<i64, String> {
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
-    let new_id = chat::create_conversation(db).await?;
+    let new_id = chat::create_conversation(db).await.map_err(|e| e.message)?;
 
     // Update cached conversation_id
     {
@@ -271,17 +248,17 @@ pub async fn clear_chat_history(app_handle: AppHandle) -> Result<i64, ErrorRespo
 #[tauri::command]
 pub async fn get_conversations(
     app_handle: AppHandle,
-) -> Result<Vec<ConversationInfo>, ErrorResponse> {
+) -> std::result::Result<Vec<ConversationInfo>, String> {
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
-    chat::get_all_conversations(db).await
+    chat::get_all_conversations(db).await.map_err(|e| e.message)
 }
 
 #[tauri::command]
 pub async fn load_conversation_messages(
     conversation_id: i64,
     app_handle: AppHandle,
-) -> Result<Vec<Message>, ErrorResponse> {
+) -> std::result::Result<Vec<Message>, String> {
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
@@ -291,13 +268,15 @@ pub async fn load_conversation_messages(
         *guard = Some(conversation_id);
     }
 
-    chat::get_messages_for_conversation(db, conversation_id).await
+    chat::get_messages_for_conversation(db, conversation_id)
+        .await
+        .map_err(|e| e.message)
 }
 
 #[tauri::command]
 pub async fn cancel_message(
     cancellation_state: State<'_, CancellationState>,
-) -> Result<(), ErrorResponse> {
+) -> std::result::Result<(), String> {
     let cancel_state = cancellation_state.0.lock();
     if let Some(tx) = &*cancel_state {
         let _ = tx.send(());
@@ -310,28 +289,26 @@ pub async fn edit_message(
     message_id: String,
     new_content: String,
     app_handle: AppHandle,
-) -> Result<Message, ErrorResponse> {
+) -> std::result::Result<Message, String> {
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
     // Parse message ID first
-    let id = message_id.parse::<i64>().map_err(|_| ErrorResponse {
-        message: "Invalid message ID".to_string(),
-        details: None,
-    })?;
+    let id = message_id
+        .parse::<i64>()
+        .map_err(|_| "Invalid message ID".to_string())?;
 
-    let mut tx = db.begin().await.map_err(chat::db_error)?;
+    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
 
     // Get current message to preserve metadata
-    let current = sqlx::query_as!(
-        DbMessage,
+    let current = sqlx::query!(
         r#"
         SELECT 
-            id as "id!",
-            conversation_id as "conversation_id!",
-            role as "role!",
-            content as "content!",
-            created_at as "created_at!",
+            id,
+            conversation_id,
+            role,
+            content,
+            created_at,
             metadata,
             original_message_id
         FROM messages 
@@ -341,7 +318,7 @@ pub async fn edit_message(
     )
     .fetch_one(&mut *tx)
     .await
-    .map_err(chat::db_error)?;
+    .map_err(|e| e.to_string())?;
 
     // Save edited message
     let edited = chat::save_message(
@@ -352,9 +329,10 @@ pub async fn edit_message(
         None,
         Some(current.id),
     )
-    .await?;
+    .await
+    .map_err(|e| e.message)?;
 
-    tx.commit().await.map_err(chat::db_error)?;
+    tx.commit().await.map_err(|e| e.to_string())?;
 
     Ok(edited)
 }
@@ -363,11 +341,13 @@ pub async fn edit_message(
 pub async fn delete_conversation(
     conversation_id: i64,
     app_handle: AppHandle,
-) -> Result<(), ErrorResponse> {
+) -> std::result::Result<(), String> {
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
-    chat::delete_conversation(db, conversation_id).await?;
+    chat::delete_conversation(db, conversation_id)
+        .await
+        .map_err(|e| e.message)?;
 
     // If this was the current conversation, clear it
     {
