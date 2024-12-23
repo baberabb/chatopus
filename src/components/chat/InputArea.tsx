@@ -77,9 +77,9 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     }, [input]);
 
     return (
-      <div className="absolute bottom-0 left-0 right-0 px-4 pb-6">
+      <div className="absolute bottom-0 left-0 right-0 px-4 pb-2">
         <form
-          className="flex items-center h-11 rounded-lg bg-opacity-60"
+          className="flex items-center min-h-[44px] rounded-lg bg-opacity-60"
           style={{
             backgroundColor: theme.surface,
             boxShadow: `0 2px 10px ${theme.shadowColor}10`,
@@ -104,7 +104,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
                 handleSend();
               }
             }}
-            className="flex-1 bg-transparent px-4 focus:outline-none resize-none h-[22px] font-sans leading-[22px] overflow-y-auto my-2"
+            className="flex-1 bg-transparent px-4 focus:outline-none resize-none h-[22px] max-h-[200px] font-sans leading-[22px] overflow-y-auto my-2"
             style={{ color: theme.text }}
             placeholder="Type a message..."
             rows={1}
