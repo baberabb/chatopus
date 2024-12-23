@@ -1,94 +1,29 @@
 import { create } from "zustand";
 import { initializeStore, themes } from './store/initStore';
-import { Theme, ThemeType, ModelConfig, ProviderSettings, ProviderType } from './types';
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { createGuard, StateGuard } from "./store/guards";
-
-interface ThemeStore {
-  themeType: ThemeType;
-  theme: Theme;
-  toggleTheme: () => void;
-  initialized: boolean;
-}
-
-interface ChatStore {
-  // State
-  messages: Message[];
-  conversations: Conversation[];
-  currentConversationId: string | null;
-  isStreaming: boolean;
-  streamingContent: string;
-  error: string | null;
-  isLoading: boolean;
-
-  // Message actions
-  sendMessage: (content: string) => Promise<void>;
-  appendStreamChunk: (chunk: string) => void;
-  completeStream: (messageId: string) => void;
-  setMessages: (messages: Message[]) => void;
-  updateLastMessage: (content: string) => void;
-  clearMessages: () => void;
-  cancelMessage: () => Promise<void>;
-
-  // Conversation actions
-  loadConversations: () => Promise<void>;
-  loadConversation: (id: string) => Promise<void>;
-  setCurrentConversationId: (id: string | null) => Promise<void>;
-  createConversation: () => Promise<string>;
-  updateConversation: (id: string, updates: Partial<Conversation>) => Promise<void>;
-  deleteConversation: (id: string) => Promise<void>;
-}
-
-interface ModelStore {
-  config: ModelConfig;
-  initialized: boolean;
-  setConfig: (config: ModelConfig) => void;
-  updateProviderSettings: (provider: ProviderType, settings: ProviderSettings) => void;
-  setActiveProvider: (provider: ProviderType) => void;
-}
-
-export interface Message {
-  id: string;
-  content: string;
-  role: string;
-  timestamp: string;
-  model?: string;
-  reactions?: {
-    thumbsUp: number;
-  };
-  isEditing?: boolean;
-  status?: 'pending' | 'streaming' | 'complete' | 'error';
-}
-
-export interface Conversation {
-  id: string;
-  title: string;
-  preview: string;
-  model: string;
-  messageCount: number;
-  timestamp: string;
-}
-
-const THEME_STORAGE_KEY = "theme";
-const MODEL_CONFIG_STORAGE_KEY = "model_config";
-
-const createMessage = (content: string, role: string, status: Message['status'] = 'complete'): Message => ({
-  id: crypto.randomUUID(),
-  content,
-  role,
-  timestamp: new Date().toISOString(),
-  status,
-});
-
-const applyTheme = (themeType: ThemeType, theme: Theme) => {
-  requestAnimationFrame(() => {
-    document.documentElement.classList.toggle("dark", themeType === "dark");
-    Object.entries(theme).forEach(([key, value]) => {
-      document.documentElement.style.setProperty(`--${key}`, value);
-    });
-  });
-};
+import {
+  createOptimisticMessage,
+  createOptimisticAssistantMessage,
+  updateMessageId,
+  rollbackMessage,
+  updateMessageStatus,
+  updateMessageContent,
+  isOptimisticMessage
+} from "./store/optimistic";
+import {
+  ChatState,
+  ThemeStore,
+  ModelStore,
+  Message,
+  Conversation,
+  Theme,
+  ThemeType,
+  ModelConfig,
+  ProviderSettings,
+  ProviderType
+} from "./store/types";
 
 export const useThemeStore = create<ThemeStore>((set) => ({
   themeType: "light",
@@ -106,7 +41,19 @@ export const useThemeStore = create<ThemeStore>((set) => ({
     }),
 }));
 
-export const useChatStore = create<ChatStore>((set, get) => {
+const THEME_STORAGE_KEY = "theme";
+const MODEL_CONFIG_STORAGE_KEY = "model_config";
+
+const applyTheme = (themeType: ThemeType, theme: Theme) => {
+  requestAnimationFrame(() => {
+    document.documentElement.classList.toggle("dark", themeType === "dark");
+    Object.entries(theme).forEach(([key, value]) => {
+      document.documentElement.style.setProperty(`--${key}`, value);
+    });
+  });
+};
+
+export const useChatStore = create<ChatState>((set, get) => {
   // Create state guard helper
   const guard = () => createGuard({
     messages: get().messages,
@@ -137,48 +84,38 @@ export const useChatStore = create<ChatStore>((set, get) => {
           await state.setCurrentConversationId(newId);
         }
 
-        // Add user message immediately
-        const userMessage = createMessage(content, 'user');
-        set(state => ({
-          messages: [...state.messages, userMessage],
-          error: null
-        }));
+        // Create optimistic messages
+        const userMessage = createOptimisticMessage(content, 'user');
+        const assistantMessage = createOptimisticAssistantMessage();
 
-        // Create empty assistant message
-        const assistantMessage = createMessage('', 'assistant', 'streaming');
+        // Update UI immediately
         set(state => ({
-          messages: [...state.messages, assistantMessage],
+          messages: [...state.messages, userMessage, assistantMessage],
+          error: null,
           isStreaming: true,
           streamingContent: ''
         }));
 
-        // Process message
+        // Process message in background
         const response = await invoke<{ reply: string, message_id: string }>('process_message', { 
           message: content 
         });
 
-        // Update assistant message with ID from backend
+        // Update with real message ID
         set(state => ({
-          messages: state.messages.map((msg, index) => 
-            index === state.messages.length - 1
-              ? { ...msg, id: response.message_id }
-              : msg
+          messages: updateMessageId(
+            updateMessageId(state.messages, userMessage.id, response.message_id + '_user'),
+            assistantMessage.id,
+            response.message_id
           )
         }));
 
       } catch (error) {
-        set({ 
+        // Roll back optimistic updates on error
+        set(state => ({
+          messages: state.messages.filter(msg => !isOptimisticMessage(msg.id)),
           error: error instanceof Error ? error.message : 'Failed to send message',
           isStreaming: false 
-        });
-
-        // Mark assistant message as error
-        set(state => ({
-          messages: state.messages.map((msg, index) => 
-            index === state.messages.length - 1
-              ? { ...msg, status: 'error' }
-              : msg
-          )
         }));
       }
     },
@@ -198,26 +135,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
       set(state => ({
         isStreaming: false,
         streamingContent: '',
-        messages: state.messages.map(msg =>
-          msg.id === messageId
-            ? { ...msg, status: 'complete' }
-            : msg
-        )
+        messages: updateMessageStatus(state.messages, messageId, 'complete')
       }));
     },
 
-    setMessages: (messages) => set({ messages }),
+    setMessages: (messages: Message[]) => set({ messages }),
     
-    updateLastMessage: (content) => set((state) => {
-      const messages = [...state.messages];
-      if (messages.length > 0) {
-        messages[messages.length - 1] = {
-          ...messages[messages.length - 1],
-          content
-        };
-      }
-      return { messages };
-    }),
+    updateLastMessage: (content: string) => set((state) => ({
+      messages: updateMessageContent(state.messages, state.messages[state.messages.length - 1].id, content)
+    })),
 
     clearMessages: () => set({ 
       messages: [],
@@ -229,7 +155,14 @@ export const useChatStore = create<ChatStore>((set, get) => {
     cancelMessage: async () => {
       try {
         await invoke('cancel_message');
-        set({ isStreaming: false });
+        set(state => ({
+          isStreaming: false,
+          messages: state.messages.map(msg => 
+            msg.status === 'streaming'
+              ? { ...msg, status: 'error' }
+              : msg
+          )
+        }));
       } catch (error) {
         console.error('Failed to cancel message:', error);
       }

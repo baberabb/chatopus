@@ -1,6 +1,6 @@
-import { Message, Conversation } from "../store";
+import { Message, ChatState } from "./types";
 
-export interface ChatState {
+export interface GuardState {
   messages: Message[];
   isStreaming: boolean;
   isLoading: boolean;
@@ -8,9 +8,9 @@ export interface ChatState {
 }
 
 export class StateGuard {
-  private state: ChatState;
+  private state: GuardState;
 
-  constructor(state: ChatState) {
+  constructor(state: GuardState) {
     this.state = state;
   }
 
@@ -77,7 +77,7 @@ export class StateGuard {
   }
 
   canDeleteConversation(conversationId: string): { allowed: boolean; reason?: string } {
-    if (this.state.isStreaming && this.state.currentConversationId === conversationId) {
+    if (this.state.isStreaming && conversationId === this.state.currentConversationId) {
       return {
         allowed: false,
         reason: "Cannot delete active conversation while streaming",
@@ -114,4 +114,4 @@ export class StateGuard {
 }
 
 // Helper to create guard instance
-export const createGuard = (state: ChatState) => new StateGuard(state);
+export const createGuard = (state: GuardState) => new StateGuard(state);

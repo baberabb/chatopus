@@ -1,21 +1,31 @@
-export interface Message {
-  id: string;
-  role: string;
-  content: string;
-  timestamp: string;
-  model?: string;
-  reactions?: {
-    thumbsUp: number;
-  };
-  isEditing?: boolean;
-  status?: 'pending' | 'streaming' | 'complete' | 'error';
+import { Message } from '../../types';
+
+// Re-export Message type
+export type { Message };
+
+// Component-specific types
+export interface MessageBlockProps {
+  message: Message;
+  onReact: (messageId: string) => void;
+  onEdit?: (messageId: string, newContent: string) => void;
+  isStreaming: boolean;
+  conversationId?: string | null;
 }
 
-export interface Conversation {
-  id: string;
-  title: string;
-  preview: string;
-  model: string;
-  messageCount: number;
-  timestamp: string;
+export interface MessageEditorProps {
+  content: string;
+  onSave: (content: string) => void;
+  onCancel: () => void;
+}
+
+export interface MessageActionsProps {
+  onEdit: () => void;
+  onReact: () => void;
+  onCopy: () => void;
+  isVisible: boolean;
+}
+
+export interface MessageContentProps {
+  message: Message;
+  isStreaming: boolean;
 }
