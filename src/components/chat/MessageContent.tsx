@@ -1,6 +1,7 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { ThumbsUp } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { useStreamEvents } from "../../hooks/useStreamEvents";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
@@ -8,46 +9,48 @@ import { useZustandTheme } from "../../store";
 import { Message } from "./types";
 import { CodeBlock } from "./CodeBlock";
 import { formatMessageRole } from "./utils";
+import { logger } from "../../utils/logger";
 
 interface MessageContentProps {
   message: Message;
-  isStreaming: boolean;
+  isStreaming?: boolean;
 }
 
 const markdownPlugins = [remarkGfm, remarkBreaks, remarkMath];
 
 export const MessageContent: React.FC<MessageContentProps> = ({
   message,
-  isStreaming,
+  isStreaming: initialStreaming = false,
 }) => {
+  const [isStreaming, setIsStreaming] = useState(initialStreaming);
+
+  useStreamEvents(() => {
+    setIsStreaming(false);
+  });
   const { theme } = useZustandTheme();
   const isAssistant = message.role === "assistant";
-  const showCursor = isStreaming && isAssistant;
 
-  const markdownComponents = useMemo(
-    () => ({
-      // @ts-ignore
-      code({ className, children, ...props }) {
-        const match = /language-(\w+)/.exec(className || "");
-        const inline = !match;
-        return inline ? (
-          <code
-            className={`${className} bg-slate-100 dark:bg-slate-800 rounded px-1 py-0.5`}
-            {...props}
-          >
-            {children}
-          </code>
-        ) : (
-          <CodeBlock
-            language={match[1]}
-            value={String(children)}
-            isStreaming={showCursor}
-          />
-        );
-      },
-    }),
-    [showCursor]
-  );
+  const markdownComponents = {
+    // @ts-ignore
+    code({ className, children, ...props }) {
+      const match = /language-(\w+)/.exec(className || "");
+      const inline = !match;
+      return inline ? (
+        <code
+          className={`${className} bg-slate-100 dark:bg-slate-800 rounded px-1 py-0.5`}
+          {...props}
+        >
+          {children}
+        </code>
+      ) : (
+        <CodeBlock
+          language={match[1]}
+          value={String(children)}
+          isStreaming={isStreaming}
+        />
+      );
+    },
+  };
 
   return (
     <div className="flex-1 min-w-0 overflow-hidden">
@@ -68,7 +71,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({
       </div>
       <div
         className="prose prose-slate dark:prose-invert prose-code:before:content-none prose-code:after:content-none max-w-none font-sans leading-relaxed tracking-normal break-words"
-        aria-live={showCursor ? "polite" : "off"}
+        aria-live={isStreaming ? "polite" : "off"}
       >
         <ReactMarkdown
           remarkPlugins={markdownPlugins}
@@ -76,11 +79,13 @@ export const MessageContent: React.FC<MessageContentProps> = ({
         >
           {message.content}
         </ReactMarkdown>
-        {showCursor && (
-          <span className="inline-block animate-pulse" aria-hidden="true">
-            ▋
-          </span>
-        )}
+        <span
+          className={`inline-block ${isStreaming ? "animate-pulse" : "opacity-0"}`}
+          aria-hidden="true"
+          style={{ width: "0.5em" }}
+        >
+          ▋
+        </span>
       </div>
       {(message.reactions?.thumbsUp ?? 0) > 0 && (
         <div
@@ -102,3 +107,5 @@ export const MessageContent: React.FC<MessageContentProps> = ({
     </div>
   );
 };
+
+MessageContent.displayName = "MessageContent";

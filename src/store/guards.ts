@@ -2,9 +2,8 @@ import { Message, ChatState } from "./types";
 
 export interface GuardState {
   messages: Message[];
-  isStreaming: boolean;
   isLoading: boolean;
-  currentConversationId: string | null;
+  currentConversationId: number | null;
 }
 
 export class StateGuard {
@@ -14,8 +13,12 @@ export class StateGuard {
     this.state = state;
   }
 
+  private isStreaming(): boolean {
+    return this.state.messages[this.state.messages.length - 1]?.status === 'streaming';
+  }
+
   canSendMessage(): { allowed: boolean; reason?: string } {
-    if (this.state.isStreaming) {
+    if (this.isStreaming()) {
       return {
         allowed: false,
         reason: "Cannot send message while streaming",
@@ -32,8 +35,8 @@ export class StateGuard {
     return { allowed: true };
   }
 
-  canEditMessage(messageId: string): { allowed: boolean; reason?: string } {
-    if (this.state.isStreaming) {
+  canEditMessage(messageId: number): { allowed: boolean; reason?: string } {
+    if (this.isStreaming()) {
       return {
         allowed: false,
         reason: "Cannot edit message while streaming",
@@ -59,7 +62,7 @@ export class StateGuard {
   }
 
   canSwitchConversation(): { allowed: boolean; reason?: string } {
-    if (this.state.isStreaming) {
+    if (this.isStreaming()) {
       return {
         allowed: false,
         reason: "Cannot switch conversation while streaming",
@@ -76,8 +79,8 @@ export class StateGuard {
     return { allowed: true };
   }
 
-  canDeleteConversation(conversationId: string): { allowed: boolean; reason?: string } {
-    if (this.state.isStreaming && conversationId === this.state.currentConversationId) {
+  canDeleteConversation(conversationId: number): { allowed: boolean; reason?: string } {
+    if (this.isStreaming() && conversationId === this.state.currentConversationId) {
       return {
         allowed: false,
         reason: "Cannot delete active conversation while streaming",
@@ -88,7 +91,7 @@ export class StateGuard {
   }
 
   canCreateConversation(): { allowed: boolean; reason?: string } {
-    if (this.state.isStreaming) {
+    if (this.isStreaming()) {
       return {
         allowed: false,
         reason: "Cannot create conversation while streaming",

@@ -16,7 +16,8 @@ use tokio::sync::broadcast;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Response {
     pub reply: String,
-    pub message_id: String,
+    pub user_message_id: i64,
+    pub assistant_message_id: i64,
     pub conversation_id: i64,
 }
 
@@ -237,7 +238,8 @@ pub async fn process_message<R: Runtime>(
 
     Ok(Response {
         reply: full_response,
-        message_id: assistant_message.id.to_string(),
+        user_message_id: user_message.id.parse::<i64>().unwrap(),
+        assistant_message_id: assistant_message.id.parse::<i64>().unwrap(),
         conversation_id,
     })
 }

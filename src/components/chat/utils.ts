@@ -58,7 +58,7 @@ export const formatMessageRole = (role: string, model?: string) => {
 /**
  * Helper function to find message index by ID
  */
-export const findMessageById = (messages: Message[], id: string) => {
+export const findMessageById = (messages: Message[], id: number) => {
   return messages.findIndex(msg => msg.id === id);
 };
 

@@ -61,14 +61,12 @@ export interface ChatState {
   messages: Message[];
   conversations: Conversation[];
   currentConversationId: number | null;
-  isStreaming: boolean;
   error: string | null;
   isLoading: boolean;
 
   // Message actions
   sendMessage: (content: string) => Promise<void>;
   appendStreamChunk: (chunk: string) => void;
-  completeStream: (messageId: string) => void;
   setMessages: (messages: Message[]) => void;
   updateLastMessage: (content: string) => void;
   clearMessages: () => void;

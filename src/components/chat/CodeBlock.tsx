@@ -16,7 +16,7 @@ interface CodeBlockButtonProps {
   icon: React.ReactElement<{
     size?: number;
     className?: string;
-    [key: string]: any;  // Allow any other props the icon might need
+    [key: string]: any; // Allow any other props the icon might need
   }>;
   label: string;
   disabled?: boolean;

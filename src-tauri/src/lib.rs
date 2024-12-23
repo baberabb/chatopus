@@ -44,15 +44,16 @@ async fn receive_message(msgid: String, state: State<'_, JupState>) -> Result<St
 }
 
 async fn setup_db(data_dir: &std::path::Path) -> Result<Db, Box<dyn StdError>> {
+    // Set SQLx log level to warn to reduce noise
+    // std::env::set_var("RUST_LOG", "sqlx=warn");
+    // env_logger::init();
+
     // Ensure data directory exists
     std::fs::create_dir_all(data_dir)?;
 
     // Setup database path
     let db_path = data_dir.join("chatopus.db");
     let db_url = format!("sqlite:{}", db_path.to_str().unwrap());
-
-    println!("Database path: {}", db_path.display());
-    println!("Database URL: {}", db_url);
 
     // Create connection options with foreign keys enabled
     let conn_opts = SqliteConnectOptions::from_str(&db_url)?
@@ -116,6 +117,7 @@ pub fn run() {
                     }),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
                 ])
+                .level_for("sqlx", log::LevelFilter::Warn)
                 .build(),
         )
         .plugin(tauri_plugin_store::Builder::default().build())

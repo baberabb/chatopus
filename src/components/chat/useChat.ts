@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Message, useChatStore } from "../../store";
+import { useChatStore } from "../../store";
+import { Message } from "../../types";
 import { findMessageById } from "./utils";
 
 export function useChat() {
@@ -9,7 +10,6 @@ export function useChat() {
     messages,
     conversations,
     currentConversationId,
-    isStreaming,
     isLoading,
     error,
     
@@ -29,11 +29,14 @@ export function useChat() {
     clearMessages,
   } = useChatStore();
 
+  // Get streaming state from last message
+  const isStreaming = messages[messages.length - 1]?.status === 'streaming';
+
   // Local UI state
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
 
   // Message editing
-  const handleEdit = useCallback(async (messageId: string, newContent: string) => {
+  const handleEdit = useCallback(async (messageId: number, newContent: string) => {
     try {
       const messageIndex = findMessageById(messages, messageId);
       if (messageIndex === -1) return;
@@ -48,7 +51,7 @@ export function useChat() {
       setMessages(updatedMessages);
 
       // Save to backend
-      await invoke("edit_message", { messageId, newContent });
+      await invoke("edit_message", { messageId: messageId.toString(), newContent });
       setEditingMessageId(null);
 
       // Reload conversation to get updated messages
@@ -73,7 +76,7 @@ export function useChat() {
   }, [messages, setMessages, currentConversationId, loadConversation]);
 
   // Start editing
-  const startEdit = useCallback((messageId: string) => {
+  const startEdit = useCallback((messageId: number) => {
     const messageIndex = findMessageById(messages, messageId);
     if (messageIndex !== -1) {
       const updatedMessages = [...messages];
@@ -111,7 +114,6 @@ export function useChat() {
     messages,
     conversations,
     currentConversationId,
-    isStreaming,
     isLoading,
     error,
     editingMessageId,

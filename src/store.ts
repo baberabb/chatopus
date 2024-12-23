@@ -3,12 +3,15 @@ import { initializeStore, themes } from './store/initStore';
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { createGuard, StateGuard } from "./store/guards";
+import { logger } from "./utils/logger";
 import {
   createOptimisticMessage,
   createOptimisticAssistantMessage,
   updateMessageId,
   rollbackMessage,
-  isOptimisticMessage
+  isOptimisticMessage,
+  updateMessageContent,
+  updateMessageStatus
 } from "./store/optimistic";
 import {
   ChatState,
@@ -21,7 +24,230 @@ import {
   ModelConfig,
   ProviderSettings,
   ProviderType
-} from "./store/types";
+} from "./types";
+
+// Only handle stream chunks - components handle completion
+listen("stream-response", (event) => {
+  const chunk = event.payload as string;
+  const lastMessage = useChatStore.getState().messages[useChatStore.getState().messages.length - 1];
+  if (lastMessage?.status === 'streaming') {
+    useChatStore.getState().appendStreamChunk(chunk);
+  }
+});
+
+export const useChatStore = create<ChatState>((set, get) => ({
+  // State
+  messages: [],
+  conversations: [],
+  currentConversationId: null,
+  error: null,
+  isLoading: false,
+
+  // Message actions
+  sendMessage: async (content: string) => {
+    try {
+      // Create optimistic messages
+      const userMessage = createOptimisticMessage(content, 'user');
+      const assistantMessage = createOptimisticAssistantMessage();
+
+      // Update UI immediately with new messages
+      set(state => ({
+        messages: [...state.messages, userMessage, assistantMessage],
+        error: null
+      }));
+
+      // Process message - backend handles conversation creation
+      const response = await invoke<{ reply: string, user_message_id: number, assistant_message_id: number, conversation_id: number }>('process_message', { 
+        request: {
+          message: content,
+          conversation_id: get().currentConversationId
+        }
+      });
+
+      // Update state with real IDs
+      set(state => ({
+        currentConversationId: response.conversation_id,
+        messages: updateMessageId(
+          updateMessageId(state.messages, userMessage.id, response.user_message_id),
+          assistantMessage.id,
+          response.assistant_message_id
+        )
+      }));
+
+      // Load conversation list in background
+      get().loadConversations();
+
+    } catch (error) {
+      // Roll back optimistic updates on error
+      const errorDetails = error instanceof Error ? error.message : JSON.stringify(error);
+      console.error('Send message error:', errorDetails);
+      set(state => ({
+        messages: state.messages.filter(msg => !isOptimisticMessage(msg.id)),
+        error: errorDetails
+      }));
+    }
+  },
+
+  appendStreamChunk: (chunk: string) => {
+    const lastMessage = get().messages[get().messages.length - 1];
+    if (lastMessage?.status === 'streaming') {
+      logger.state('Store', {
+        action: 'appendStreamChunk',
+        messageId: lastMessage.id,
+        before: {
+          contentLength: lastMessage.content.length,
+          chunkLength: chunk.length
+        }
+      });
+
+      set(state => ({
+        messages: updateMessageContent(state.messages, lastMessage.id, lastMessage.content + chunk)
+      }));
+
+      logger.state('Store', {
+        action: 'appendStreamChunk',
+        messageId: lastMessage.id,
+        after: {
+          contentLength: get().messages.find(m => m.id === lastMessage.id)?.content.length
+        }
+      });
+    }
+  },
+
+  setMessages: (messages: Message[]) => set({ messages }),
+  
+  updateLastMessage: (content: string) => {
+    const lastMessage = get().messages[get().messages.length - 1];
+    if (lastMessage) {
+      set(state => ({
+        messages: updateMessageContent(state.messages, lastMessage.id, content)
+      }));
+    }
+  },
+
+  clearMessages: () => set({ 
+    messages: [],
+    error: null
+  }),
+
+  cancelMessage: async () => {
+    try {
+      await invoke('cancel_message');
+      const lastMessage = get().messages[get().messages.length - 1];
+      if (lastMessage?.status === 'streaming') {
+        logger.state('Store', {
+          action: 'cancelMessage',
+          messageId: lastMessage.id,
+          before: {
+            messageStatus: lastMessage.status
+          }
+        });
+
+        // Update message status
+        set(state => ({
+          messages: updateMessageStatus(state.messages, lastMessage.id, 'error')
+        }));
+
+        logger.state('Store', {
+          action: 'cancelMessage',
+          messageId: lastMessage.id,
+          after: {
+            messageStatus: get().messages.find(m => m.id === lastMessage.id)?.status
+          }
+        });
+      }
+    } catch (error) {
+      const errorDetails = error instanceof Error ? error.message : JSON.stringify(error);
+      console.error('Failed to cancel message:', errorDetails);
+      set({ error: errorDetails });
+    }
+  },
+
+  // Conversation actions
+  loadConversations: async () => {
+    set({ isLoading: true });
+    try {
+      const conversations = await invoke<Conversation[]>('get_conversations');
+      set({ conversations, isLoading: false });
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to load conversations',
+        isLoading: false 
+      });
+    }
+  },
+
+  loadConversation: async (id: number) => {
+    set({ isLoading: true });
+    try {
+      const messages = await invoke<Message[]>('load_conversation_messages', {
+        conversationId: id
+      });
+      set({ 
+        messages,
+        currentConversationId: id,
+        isLoading: false,
+        error: null
+      });
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to load conversation',
+        isLoading: false 
+      });
+    }
+  },
+
+  setCurrentConversationId: async (id: number | null) => {
+    if (id === get().currentConversationId) return;
+    
+    set({ currentConversationId: id });
+    if (id) {
+      await get().loadConversation(id);
+    } else {
+      set({ messages: [] });
+    }
+  },
+
+  createConversation: async () => {
+    // Always create a new conversation
+    const newId = await invoke<number>('clear_chat_history');
+    
+    // Clear current state
+    set({ 
+      currentConversationId: null, 
+      messages: [],
+      error: null
+    });
+    
+    // Load updated conversation list
+    await get().loadConversations();
+    return newId;
+  },
+
+  updateConversation: async (id: number, updates: Partial<Conversation>) => {
+    try {
+      await invoke('update_conversation', { id, updates });
+      await get().loadConversations();
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to update conversation' });
+    }
+  },
+
+  deleteConversation: async (id: number) => {
+    // First clear local state if it's the current conversation
+    if (id === get().currentConversationId) {
+      set({ 
+        currentConversationId: null, 
+        messages: [],
+        error: null
+      });
+    }
+
+    // Then delete from backend
+    await invoke('delete_conversation', { conversationId: id });
+    await get().loadConversations();
+  }
+}));
 
 export const useThemeStore = create<ThemeStore>((set) => ({
   themeType: "light",
@@ -38,264 +264,6 @@ export const useThemeStore = create<ThemeStore>((set) => ({
       return { themeType: newThemeType, theme: newTheme };
     }),
 }));
-
-const THEME_STORAGE_KEY = "theme";
-const MODEL_CONFIG_STORAGE_KEY = "model_config";
-
-const applyTheme = (themeType: ThemeType, theme: Theme) => {
-  requestAnimationFrame(() => {
-    document.documentElement.classList.toggle("dark", themeType === "dark");
-    Object.entries(theme).forEach(([key, value]) => {
-      document.documentElement.style.setProperty(`--${key}`, value);
-    });
-  });
-};
-
-export const useChatStore = create<ChatState>((set, get) => {
-  // Helper functions
-  const updateMessage = (id: string, updates: Partial<Message>) => {
-    set(state => ({
-      messages: state.messages.map(msg =>
-        msg.id === id ? { ...msg, ...updates } : msg
-      )
-    }));
-  };
-
-  const parseConversationId = (id: string | null) => {
-    // Always return undefined for null/empty IDs to trigger new conversation creation
-    if (!id) return undefined;
-    const parsed = parseInt(id, 10);
-    // Return undefined for invalid IDs to trigger new conversation creation
-    return isNaN(parsed) ? undefined : parsed;
-  };
-
-  // Create state guard helper
-  const guard = () => createGuard({
-    messages: get().messages,
-    isStreaming: get().isStreaming,
-    isLoading: get().isLoading,
-    currentConversationId: get().currentConversationId,
-  });
-
-  return {
-    // State
-    messages: [],
-    conversations: [],
-    currentConversationId: null,
-    isStreaming: false,
-    error: null,
-    isLoading: false,
-
-    // Message actions
-    sendMessage: async (content: string) => {
-      try {
-        // Check if we can send message
-        StateGuard.assertOperation(guard().canSendMessage());
-
-        // Create optimistic messages
-        const userMessage = createOptimisticMessage(content, 'user');
-        const assistantMessage = createOptimisticAssistantMessage();
-
-        // Update UI immediately with new messages
-        set(state => ({
-          messages: [...state.messages, userMessage, assistantMessage],
-          error: null,
-          isStreaming: true
-        }));
-
-        // Process message - backend handles conversation creation
-        const response = await invoke<{ reply: string, message_id: string, conversation_id: string }>('process_message', { 
-          request: {
-            message: content,
-            conversation_id: get().currentConversationId ? parseInt(get().currentConversationId) : undefined
-          }
-        });
-
-        // Update state with real IDs
-        set(state => ({
-          currentConversationId: response.conversation_id.toString(),
-          messages: updateMessageId(
-            updateMessageId(state.messages, userMessage.id, response.message_id + '_user'),
-            assistantMessage.id,
-            response.message_id
-          )
-        }));
-
-        // Load conversation list in background
-        get().loadConversations();
-
-      } catch (error) {
-        // Roll back optimistic updates on error
-        const errorDetails = error instanceof Error ? error.message : JSON.stringify(error);
-        console.error('Send message error:', errorDetails);
-        set(state => ({
-          messages: state.messages.filter(msg => !isOptimisticMessage(msg.id)),
-          error: errorDetails,
-          isStreaming: false 
-        }));
-      }
-    },
-
-    appendStreamChunk: (chunk: string) => {
-      const lastMessage = get().messages[get().messages.length - 1];
-      if (lastMessage?.status === 'streaming') {
-        updateMessage(lastMessage.id, {
-          content: lastMessage.content + chunk
-        });
-      }
-    },
-
-    completeStream: (messageId: string) => {
-      updateMessage(messageId, { status: 'complete' });
-      set({ isStreaming: false });
-    },
-
-    setMessages: (messages: Message[]) => set({ messages }),
-    
-    updateLastMessage: (content: string) => {
-      const lastMessage = get().messages[get().messages.length - 1];
-      if (lastMessage) {
-        updateMessage(lastMessage.id, { content });
-      }
-    },
-
-    clearMessages: () => set({ 
-      messages: [],
-      isStreaming: false,
-      error: null
-    }),
-
-    cancelMessage: async () => {
-      try {
-        await invoke('cancel_message');
-        const lastMessage = get().messages[get().messages.length - 1];
-        if (lastMessage?.status === 'streaming') {
-          updateMessage(lastMessage.id, {
-            status: 'error',
-            error: 'Message cancelled'
-          });
-        }
-        set({ isStreaming: false });
-      } catch (error) {
-        console.error('Failed to cancel message:', error);
-      }
-    },
-
-    // Conversation actions
-    loadConversations: async () => {
-      set({ isLoading: true });
-      try {
-        const conversations = await invoke<Conversation[]>('get_conversations');
-        set({ conversations, isLoading: false });
-      } catch (error) {
-        set({ 
-          error: error instanceof Error ? error.message : 'Failed to load conversations',
-          isLoading: false 
-        });
-      }
-    },
-
-    loadConversation: async (id: string) => {
-      try {
-        // Check if we can switch conversation
-        StateGuard.assertOperation(guard().canSwitchConversation());
-
-        set({ isLoading: true });
-        const messages = await invoke<Message[]>('load_conversation_messages', {
-          conversationId: parseInt(id, 10)
-        });
-        set({ 
-          messages,
-          currentConversationId: id,
-          isLoading: false,
-          error: null
-        });
-      } catch (error) {
-        set({ 
-          error: error instanceof Error ? error.message : 'Failed to load conversation',
-          isLoading: false 
-        });
-      }
-    },
-
-    setCurrentConversationId: async (id: string | null) => {
-      if (id === get().currentConversationId) return;
-      
-      try {
-        // Check if we can switch conversation
-        if (id) {
-          StateGuard.assertOperation(guard().canSwitchConversation());
-        }
-
-        set({ currentConversationId: id });
-        if (id) {
-          await get().loadConversation(id);
-        } else {
-          set({ messages: [] });
-        }
-      } catch (error) {
-        set({ error: error instanceof Error ? error.message : 'Failed to switch conversation' });
-      }
-    },
-
-    createConversation: async () => {
-      try {
-        // Check if we can create conversation
-        StateGuard.assertOperation(guard().canCreateConversation());
-
-        // Always create a new conversation
-        const newId = await invoke<string>('clear_chat_history');
-        
-        // Clear current state
-        set({ 
-          currentConversationId: null,
-          messages: [],
-          isStreaming: false,
-          error: null
-        });
-        
-        // Load updated conversation list
-        await get().loadConversations();
-        return newId;
-      } catch (error) {
-        set({ error: error instanceof Error ? error.message : 'Failed to create conversation' });
-        throw error;
-      }
-    },
-
-    updateConversation: async (id: string, updates: Partial<Conversation>) => {
-      try {
-        await invoke('update_conversation', { id: parseInt(id, 10), updates });
-        await get().loadConversations();
-      } catch (error) {
-        set({ error: error instanceof Error ? error.message : 'Failed to update conversation' });
-      }
-    },
-
-    deleteConversation: async (id: string) => {
-      try {
-        // Check if we can delete conversation
-        StateGuard.assertOperation(guard().canDeleteConversation(id));
-
-        // First clear local state if it's the current conversation
-        if (id === get().currentConversationId) {
-          set({ 
-            currentConversationId: null, 
-            messages: [],
-            isStreaming: false,
-            error: null
-          });
-        }
-
-        // Then delete from backend
-        await invoke('delete_conversation', { conversationId: parseInt(id, 10) });
-        await get().loadConversations();
-      } catch (error) {
-        set({ error: error instanceof Error ? error.message : 'Failed to delete conversation' });
-      }
-    }
-  };
-});
 
 export const useModelStore = create<ModelStore>((set) => ({
   config: {
@@ -372,6 +340,18 @@ export const useModelStore = create<ModelStore>((set) => ({
     }),
 }));
 
+const THEME_STORAGE_KEY = "theme";
+const MODEL_CONFIG_STORAGE_KEY = "model_config";
+
+const applyTheme = (themeType: ThemeType, theme: Theme) => {
+  requestAnimationFrame(() => {
+    document.documentElement.classList.toggle("dark", themeType === "dark");
+    Object.entries(theme).forEach(([key, value]) => {
+      document.documentElement.style.setProperty(`--${key}`, value);
+    });
+  });
+};
+
 // Initialize stores asynchronously
 initializeStore().then(({ theme, modelConfig }) => {
   useThemeStore.setState({ 
@@ -403,16 +383,3 @@ export const useZustandTheme = () => {
   }
   return store;
 };
-
-// Set up event listeners
-listen("stream-response", (event) => {
-  const chunk = event.payload as string;
-  if (useChatStore.getState().isStreaming) {
-    useChatStore.getState().appendStreamChunk(chunk);
-  }
-});
-
-listen("stream-complete", (event) => {
-  const messageId = event.payload as string;
-  useChatStore.getState().completeStream(messageId);
-});

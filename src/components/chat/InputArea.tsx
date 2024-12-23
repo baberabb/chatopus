@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Paperclip, Zap, CornerRightUp, XCircle } from "lucide-react";
 import { useZustandTheme } from "../../store";
+import { useStreamEvents } from "../../hooks/useStreamEvents";
 
 interface InputAreaProps {
   onSend: (message: string) => void;
@@ -44,8 +45,13 @@ const ActionButton: React.FC<ActionButtonProps> = ({
 };
 
 export const InputArea: React.FC<InputAreaProps> = React.memo(
-  ({ onSend, isStreaming, isCancellable, onCancel }) => {
+  ({ onSend, isStreaming: initialStreaming, isCancellable, onCancel }) => {
     const { theme } = useZustandTheme();
+    const [isStreaming, setIsStreaming] = useState(initialStreaming);
+
+    useStreamEvents(() => {
+      setIsStreaming(false);
+    });
     const [input, setInput] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
