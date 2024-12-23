@@ -24,6 +24,15 @@ export function ChatContainer() {
     cancelMessage,
   } = useChat();
 
+  // Cleanup on unmount or conversation switch
+  useEffect(() => {
+    return () => {
+      if (isStreaming) {
+        cancelMessage();
+      }
+    };
+  }, [isStreaming, cancelMessage, currentConversationId]);
+
   // Scroll to bottom when new messages arrive
   useEffect(() => {
     if (messageListRef.current) {

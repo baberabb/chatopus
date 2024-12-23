@@ -3,6 +3,7 @@ import { initializeStore, themes } from './store/initStore';
 import { Theme, ThemeType, ModelConfig, ProviderSettings, ProviderType } from './types';
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { createGuard, StateGuard } from "./store/guards";
 
 interface ThemeStore {
   themeType: ThemeType;
@@ -28,6 +29,7 @@ interface ChatStore {
   setMessages: (messages: Message[]) => void;
   updateLastMessage: (content: string) => void;
   clearMessages: () => void;
+  cancelMessage: () => Promise<void>;
 
   // Conversation actions
   loadConversations: () => Promise<void>;
@@ -104,194 +106,234 @@ export const useThemeStore = create<ThemeStore>((set) => ({
     }),
 }));
 
-export const useChatStore = create<ChatStore>((set, get) => ({
-  // State
-  messages: [],
-  conversations: [],
-  currentConversationId: null,
-  isStreaming: false,
-  streamingContent: '',
-  error: null,
-  isLoading: false,
+export const useChatStore = create<ChatStore>((set, get) => {
+  // Create state guard helper
+  const guard = () => createGuard({
+    messages: get().messages,
+    isStreaming: get().isStreaming,
+    isLoading: get().isLoading,
+    currentConversationId: get().currentConversationId,
+  });
 
-  // Message actions
-  sendMessage: async (content: string) => {
-    const state = get();
-    if (!state.currentConversationId) {
-      const newId = await state.createConversation();
-      await state.setCurrentConversationId(newId);
-    }
-
-    // Add user message immediately
-    const userMessage = createMessage(content, 'user');
-    set(state => ({
-      messages: [...state.messages, userMessage],
-      error: null
-    }));
-
-    // Create empty assistant message
-    const assistantMessage = createMessage('', 'assistant', 'streaming');
-    set(state => ({
-      messages: [...state.messages, assistantMessage],
-      isStreaming: true,
-      streamingContent: ''
-    }));
-
-    try {
-      // Process message
-      const response = await invoke<{ reply: string, message_id: string }>('process_message', { 
-        message: content 
-      });
-
-      // Update assistant message with ID from backend
-      set(state => ({
-        messages: state.messages.map((msg, index) => 
-          index === state.messages.length - 1
-            ? { ...msg, id: response.message_id }
-            : msg
-        )
-      }));
-
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to send message',
-        isStreaming: false 
-      });
-
-      // Mark assistant message as error
-      set(state => ({
-        messages: state.messages.map((msg, index) => 
-          index === state.messages.length - 1
-            ? { ...msg, status: 'error' }
-            : msg
-        )
-      }));
-    }
-  },
-
-  appendStreamChunk: (chunk: string) => {
-    set(state => ({
-      streamingContent: state.streamingContent + chunk,
-      messages: state.messages.map((msg, index) => 
-        index === state.messages.length - 1 
-          ? { ...msg, content: state.streamingContent + chunk }
-          : msg
-      )
-    }));
-  },
-
-  completeStream: (messageId: string) => {
-    set(state => ({
-      isStreaming: false,
-      streamingContent: '',
-      messages: state.messages.map(msg =>
-        msg.id === messageId
-          ? { ...msg, status: 'complete' }
-          : msg
-      )
-    }));
-  },
-
-  setMessages: (messages) => set({ messages }),
-  
-  updateLastMessage: (content) => set((state) => {
-    const messages = [...state.messages];
-    if (messages.length > 0) {
-      messages[messages.length - 1] = {
-        ...messages[messages.length - 1],
-        content
-      };
-    }
-    return { messages };
-  }),
-
-  clearMessages: () => set({ 
+  return {
+    // State
     messages: [],
-    streamingContent: '',
+    conversations: [],
+    currentConversationId: null,
     isStreaming: false,
-    error: null
-  }),
+    streamingContent: '',
+    error: null,
+    isLoading: false,
 
-  // Conversation actions
-  loadConversations: async () => {
-    set({ isLoading: true });
-    try {
-      const conversations = await invoke<Conversation[]>('get_conversations');
-      set({ conversations, isLoading: false });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to load conversations',
-        isLoading: false 
-      });
-    }
-  },
+    // Message actions
+    sendMessage: async (content: string) => {
+      try {
+        // Check if we can send message
+        StateGuard.assertOperation(guard().canSendMessage());
 
-  loadConversation: async (id: string) => {
-    set({ isLoading: true });
-    try {
-      const messages = await invoke<Message[]>('load_conversation_messages', {
-        conversationId: parseInt(id, 10)
-      });
-      set({ 
-        messages,
-        currentConversationId: id,
-        isLoading: false,
-        error: null
-      });
-    } catch (error) {
-      set({ 
-        error: error instanceof Error ? error.message : 'Failed to load conversation',
-        isLoading: false 
-      });
-    }
-  },
+        const state = get();
+        if (!state.currentConversationId) {
+          const newId = await state.createConversation();
+          await state.setCurrentConversationId(newId);
+        }
 
-  setCurrentConversationId: async (id: string | null) => {
-    if (id === get().currentConversationId) return;
-    
-    set({ currentConversationId: id });
-    if (id) {
-      await get().loadConversation(id);
-    } else {
-      set({ messages: [] });
-    }
-  },
+        // Add user message immediately
+        const userMessage = createMessage(content, 'user');
+        set(state => ({
+          messages: [...state.messages, userMessage],
+          error: null
+        }));
 
-  createConversation: async () => {
-    try {
-      const newId = await invoke<string>('clear_chat_history');
-      await get().loadConversations();
-      return newId;
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to create conversation' });
-      throw error;
-    }
-  },
+        // Create empty assistant message
+        const assistantMessage = createMessage('', 'assistant', 'streaming');
+        set(state => ({
+          messages: [...state.messages, assistantMessage],
+          isStreaming: true,
+          streamingContent: ''
+        }));
 
-  updateConversation: async (id: string, updates: Partial<Conversation>) => {
-    try {
-      await invoke('update_conversation', { id: parseInt(id, 10), updates });
-      await get().loadConversations();
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to update conversation' });
-    }
-  },
+        // Process message
+        const response = await invoke<{ reply: string, message_id: string }>('process_message', { 
+          message: content 
+        });
 
-  deleteConversation: async (id: string) => {
-    try {
-      await invoke('delete_conversation', { conversationId: parseInt(id, 10) });
-      
-      // If deleted current conversation, clear it
-      if (id === get().currentConversationId) {
-        set({ currentConversationId: null, messages: [] });
+        // Update assistant message with ID from backend
+        set(state => ({
+          messages: state.messages.map((msg, index) => 
+            index === state.messages.length - 1
+              ? { ...msg, id: response.message_id }
+              : msg
+          )
+        }));
+
+      } catch (error) {
+        set({ 
+          error: error instanceof Error ? error.message : 'Failed to send message',
+          isStreaming: false 
+        });
+
+        // Mark assistant message as error
+        set(state => ({
+          messages: state.messages.map((msg, index) => 
+            index === state.messages.length - 1
+              ? { ...msg, status: 'error' }
+              : msg
+          )
+        }));
       }
+    },
+
+    appendStreamChunk: (chunk: string) => {
+      set(state => ({
+        streamingContent: state.streamingContent + chunk,
+        messages: state.messages.map((msg, index) => 
+          index === state.messages.length - 1 
+            ? { ...msg, content: state.streamingContent + chunk }
+            : msg
+        )
+      }));
+    },
+
+    completeStream: (messageId: string) => {
+      set(state => ({
+        isStreaming: false,
+        streamingContent: '',
+        messages: state.messages.map(msg =>
+          msg.id === messageId
+            ? { ...msg, status: 'complete' }
+            : msg
+        )
+      }));
+    },
+
+    setMessages: (messages) => set({ messages }),
+    
+    updateLastMessage: (content) => set((state) => {
+      const messages = [...state.messages];
+      if (messages.length > 0) {
+        messages[messages.length - 1] = {
+          ...messages[messages.length - 1],
+          content
+        };
+      }
+      return { messages };
+    }),
+
+    clearMessages: () => set({ 
+      messages: [],
+      streamingContent: '',
+      isStreaming: false,
+      error: null
+    }),
+
+    cancelMessage: async () => {
+      try {
+        await invoke('cancel_message');
+        set({ isStreaming: false });
+      } catch (error) {
+        console.error('Failed to cancel message:', error);
+      }
+    },
+
+    // Conversation actions
+    loadConversations: async () => {
+      set({ isLoading: true });
+      try {
+        const conversations = await invoke<Conversation[]>('get_conversations');
+        set({ conversations, isLoading: false });
+      } catch (error) {
+        set({ 
+          error: error instanceof Error ? error.message : 'Failed to load conversations',
+          isLoading: false 
+        });
+      }
+    },
+
+    loadConversation: async (id: string) => {
+      try {
+        // Check if we can switch conversation
+        StateGuard.assertOperation(guard().canSwitchConversation());
+
+        set({ isLoading: true });
+        const messages = await invoke<Message[]>('load_conversation_messages', {
+          conversationId: parseInt(id, 10)
+        });
+        set({ 
+          messages,
+          currentConversationId: id,
+          isLoading: false,
+          error: null
+        });
+      } catch (error) {
+        set({ 
+          error: error instanceof Error ? error.message : 'Failed to load conversation',
+          isLoading: false 
+        });
+      }
+    },
+
+    setCurrentConversationId: async (id: string | null) => {
+      if (id === get().currentConversationId) return;
       
-      await get().loadConversations();
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to delete conversation' });
+      try {
+        // Check if we can switch conversation
+        if (id) {
+          StateGuard.assertOperation(guard().canSwitchConversation());
+        }
+
+        set({ currentConversationId: id });
+        if (id) {
+          await get().loadConversation(id);
+        } else {
+          set({ messages: [] });
+        }
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'Failed to switch conversation' });
+      }
+    },
+
+    createConversation: async () => {
+      try {
+        // Check if we can create conversation
+        StateGuard.assertOperation(guard().canCreateConversation());
+
+        const newId = await invoke<string>('clear_chat_history');
+        await get().loadConversations();
+        return newId;
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'Failed to create conversation' });
+        throw error;
+      }
+    },
+
+    updateConversation: async (id: string, updates: Partial<Conversation>) => {
+      try {
+        await invoke('update_conversation', { id: parseInt(id, 10), updates });
+        await get().loadConversations();
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'Failed to update conversation' });
+      }
+    },
+
+    deleteConversation: async (id: string) => {
+      try {
+        // Check if we can delete conversation
+        StateGuard.assertOperation(guard().canDeleteConversation(id));
+
+        await invoke('delete_conversation', { conversationId: parseInt(id, 10) });
+        
+        // If deleted current conversation, clear it
+        if (id === get().currentConversationId) {
+          set({ currentConversationId: null, messages: [] });
+        }
+        
+        await get().loadConversations();
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'Failed to delete conversation' });
+      }
     }
-  }
-}));
+  };
+});
 
 export const useModelStore = create<ModelStore>((set) => ({
   config: {
