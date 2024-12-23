@@ -22,7 +22,7 @@
 //! ```rust
 //! use crate::apimodels::{
 //!     get_provider_registry,
-//!     provider::{Provider, ProviderBuilder, ProviderOptions},
+//!     core::provider::{Provider, ProviderBuilder, ProviderOptions},
 //!     init,
 //! };
 //!
@@ -51,15 +51,6 @@ pub mod providers;
 
 use std::sync::Arc;
 
-// Re-export common types and traits
-pub use core::{
-    error::{Error, ErrorExt},
-    provider::{Provider, ProviderBuilder, ProviderCapabilities, ProviderOptions},
-    response::{ChatResponse, ResponseHandler, TokenUsage},
-    streaming::{StreamEvent, StreamHandler},
-    types::{Message, MessageReactions},
-};
-
 // Re-export provider registry
 pub use providers::registry::{create_provider_registry, ProviderRegistry};
 
@@ -73,6 +64,6 @@ pub fn get_provider_registry() -> Arc<ProviderRegistry> {
 }
 
 /// Initialize default providers
-pub fn init() -> Result<(), Error> {
+pub fn init() -> Result<(), core::error::Error> {
     providers::registry::register_default_providers(&PROVIDER_REGISTRY)
 }

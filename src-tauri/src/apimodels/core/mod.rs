@@ -11,7 +11,7 @@
 //! ```rust
 //! use crate::apimodels::core::{
 //!     Provider, ProviderBuilder, ProviderOptions, Message, Error,
-//!     StreamHandler, StreamEvent,
+//!     StreamResponse,
 //! };
 //!
 //! // Create a provider
@@ -45,9 +45,9 @@ pub mod types;
 // Re-export common types and traits
 pub use error::{Error, ErrorExt};
 pub use provider::{Provider, ProviderBuilder, ProviderCapabilities, ProviderOptions};
-pub use response::{ChatResponse, ResponseHandler, TokenUsage};
-pub use streaming::{StreamEvent, StreamHandler};
-pub use types::Message;
+pub use response::ResponseHandler;
+pub use streaming::StreamHandler;
+pub use types::*;
 
 // Re-export error handlers
 pub use error::handlers::{handle_response_error, retry_with_backoff};
