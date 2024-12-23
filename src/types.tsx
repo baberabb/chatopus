@@ -12,7 +12,7 @@ export type ThemeType = "light" | "dark";
 
 // Message types
 export interface Message {
-  id: string;
+  id: number;
   content: string;
   role: string;
   timestamp: string;
@@ -21,12 +21,13 @@ export interface Message {
     thumbsUp: number;
   };
   isEditing?: boolean;
-  status?: "pending" | "streaming" | "complete" | "error";
+  status?: "streaming" | "complete" | "error";
+  error?: string;
 }
 
 // Conversation types
 export interface Conversation {
-  id: string;
+  id: number;
   title: string;
   preview: string;
   model: string;
@@ -59,9 +60,8 @@ export interface ChatState {
   // State
   messages: Message[];
   conversations: Conversation[];
-  currentConversationId: string | null;
+  currentConversationId: number | null;
   isStreaming: boolean;
-  streamingContent: string;
   error: string | null;
   isLoading: boolean;
 
@@ -76,14 +76,14 @@ export interface ChatState {
 
   // Conversation actions
   loadConversations: () => Promise<void>;
-  loadConversation: (id: string) => Promise<void>;
-  setCurrentConversationId: (id: string | null) => Promise<void>;
-  createConversation: () => Promise<string>;
+  loadConversation: (id: number) => Promise<void>;
+  setCurrentConversationId: (id: number | null) => Promise<void>;
+  createConversation: () => Promise<number>;
   updateConversation: (
-    id: string,
+    id: number,
     updates: Partial<Conversation>
   ) => Promise<void>;
-  deleteConversation: (id: string) => Promise<void>;
+  deleteConversation: (id: number) => Promise<void>;
 }
 
 export interface ThemeStore {

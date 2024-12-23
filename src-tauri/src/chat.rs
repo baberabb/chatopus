@@ -15,8 +15,30 @@ use tokio::sync::broadcast;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Response {
-    reply: String,
-    message_id: String,
+    pub reply: String,
+    pub message_id: String,
+    pub conversation_id: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProcessMessageError {
+    pub message: String,
+    pub details: Option<String>,
+}
+
+impl From<ErrorResponse> for ProcessMessageError {
+    fn from(error: ErrorResponse) -> Self {
+        ProcessMessageError {
+            message: error.message,
+            details: error.details,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProcessMessageRequest {
+    message: String,
+    conversation_id: Option<i64>,
 }
 
 #[derive(Clone)]
@@ -30,19 +52,24 @@ impl Default for CancellationState {
 
 #[tauri::command]
 pub async fn process_message<R: Runtime>(
-    message: String,
+    request: ProcessMessageRequest,
     app_handle: AppHandle<R>,
     config_state: State<'_, ConfigState>,
     cancellation_state: State<'_, CancellationState>,
     window: Window<R>,
-) -> Result<Response, ErrorResponse> {
-    println!("Processing message: {}", message);
+) -> Result<Response, ProcessMessageError> {
+    println!(
+        "Processing message: {} for conversation: {:?}",
+        request.message, request.conversation_id
+    );
 
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
-    // Get or create conversation
-    let conversation_id = chat::get_or_create_conversation_cached(&app_state).await?;
+    // Get or create conversation using the single source of truth
+    let conversation_id = chat::get_or_create_conversation_cached(&app_state)
+        .await
+        .map_err(ProcessMessageError::from)?;
 
     // Extract provider configuration
     let (provider_type, provider_config, streaming_enabled) = {
@@ -50,7 +77,7 @@ pub async fn process_message<R: Runtime>(
         let provider_settings = config
             .providers
             .get(&config.active_provider)
-            .ok_or_else(|| ErrorResponse {
+            .ok_or_else(|| ProcessMessageError {
                 message: "Provider configuration error".to_string(),
                 details: Some("No provider configured".to_string()),
             })?;
@@ -79,16 +106,31 @@ pub async fn process_message<R: Runtime>(
     };
 
     // Save user message
-    let mut tx = db.begin().await.map_err(chat::db_error)?;
-    let user_message =
-        chat::save_message(&mut tx, conversation_id, "user", &message, None, None).await?;
-    tx.commit().await.map_err(chat::db_error)?;
+    let mut tx = db
+        .begin()
+        .await
+        .map_err(chat::db_error)
+        .map_err(ProcessMessageError::from)?;
+    let user_message = chat::save_message(
+        &mut tx,
+        conversation_id,
+        "user",
+        &request.message,
+        None,
+        None,
+    )
+    .await
+    .map_err(ProcessMessageError::from)?;
+    tx.commit()
+        .await
+        .map_err(chat::db_error)
+        .map_err(ProcessMessageError::from)?;
 
     // Initialize provider
     let provider = match ProviderFactory::create_provider(&provider_type, provider_config.clone()) {
         Ok(p) => p,
         Err(e) => {
-            return Err(ErrorResponse {
+            return Err(ProcessMessageError {
                 message: "Provider initialization failed".to_string(),
                 details: Some(e.to_string()),
             });
@@ -96,7 +138,9 @@ pub async fn process_message<R: Runtime>(
     };
 
     // Load conversation history
-    let history = chat::get_messages_for_conversation(db, conversation_id).await?;
+    let history = chat::get_messages_for_conversation(db, conversation_id)
+        .await
+        .map_err(ProcessMessageError::from)?;
 
     // Setup cancellation
     let (cancel_tx, cancel_rx) = broadcast::channel(1);
@@ -132,7 +176,7 @@ pub async fn process_message<R: Runtime>(
         {
             Ok(response) => response,
             Err(e) => {
-                return Err(ErrorResponse {
+                return Err(ProcessMessageError {
                     message: "API request failed".to_string(),
                     details: Some(e.to_string()),
                 });
@@ -153,7 +197,7 @@ pub async fn process_message<R: Runtime>(
         {
             Ok(response) => response,
             Err(e) => {
-                return Err(ErrorResponse {
+                return Err(ProcessMessageError {
                     message: "API request failed".to_string(),
                     details: Some(e.to_string()),
                 });
@@ -171,8 +215,12 @@ pub async fn process_message<R: Runtime>(
         Some(&provider_config.model),
         None,
     )
-    .await?;
-    tx.commit().await.map_err(chat::db_error)?;
+    .await
+    .map_err(ProcessMessageError::from)?;
+    tx.commit()
+        .await
+        .map_err(chat::db_error)
+        .map_err(ProcessMessageError::from)?;
 
     // Clear cancellation
     {
@@ -190,6 +238,7 @@ pub async fn process_message<R: Runtime>(
     Ok(Response {
         reply: full_response,
         message_id: assistant_message.id.to_string(),
+        conversation_id,
     })
 }
 

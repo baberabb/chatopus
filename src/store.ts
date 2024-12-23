@@ -8,8 +8,6 @@ import {
   createOptimisticAssistantMessage,
   updateMessageId,
   rollbackMessage,
-  updateMessageStatus,
-  updateMessageContent,
   isOptimisticMessage
 } from "./store/optimistic";
 import {
@@ -54,6 +52,23 @@ const applyTheme = (themeType: ThemeType, theme: Theme) => {
 };
 
 export const useChatStore = create<ChatState>((set, get) => {
+  // Helper functions
+  const updateMessage = (id: string, updates: Partial<Message>) => {
+    set(state => ({
+      messages: state.messages.map(msg =>
+        msg.id === id ? { ...msg, ...updates } : msg
+      )
+    }));
+  };
+
+  const parseConversationId = (id: string | null) => {
+    // Always return undefined for null/empty IDs to trigger new conversation creation
+    if (!id) return undefined;
+    const parsed = parseInt(id, 10);
+    // Return undefined for invalid IDs to trigger new conversation creation
+    return isNaN(parsed) ? undefined : parsed;
+  };
+
   // Create state guard helper
   const guard = () => createGuard({
     messages: get().messages,
@@ -68,7 +83,6 @@ export const useChatStore = create<ChatState>((set, get) => {
     conversations: [],
     currentConversationId: null,
     isStreaming: false,
-    streamingContent: '',
     error: null,
     isLoading: false,
 
@@ -78,31 +92,28 @@ export const useChatStore = create<ChatState>((set, get) => {
         // Check if we can send message
         StateGuard.assertOperation(guard().canSendMessage());
 
-        const state = get();
-        if (!state.currentConversationId) {
-          const newId = await state.createConversation();
-          await state.setCurrentConversationId(newId);
-        }
-
         // Create optimistic messages
         const userMessage = createOptimisticMessage(content, 'user');
         const assistantMessage = createOptimisticAssistantMessage();
 
-        // Update UI immediately
+        // Update UI immediately with new messages
         set(state => ({
           messages: [...state.messages, userMessage, assistantMessage],
           error: null,
-          isStreaming: true,
-          streamingContent: ''
+          isStreaming: true
         }));
 
-        // Process message in background
-        const response = await invoke<{ reply: string, message_id: string }>('process_message', { 
-          message: content 
+        // Process message - backend handles conversation creation
+        const response = await invoke<{ reply: string, message_id: string, conversation_id: string }>('process_message', { 
+          request: {
+            message: content,
+            conversation_id: get().currentConversationId ? parseInt(get().currentConversationId) : undefined
+          }
         });
 
-        // Update with real message ID
+        // Update state with real IDs
         set(state => ({
+          currentConversationId: response.conversation_id.toString(),
           messages: updateMessageId(
             updateMessageId(state.messages, userMessage.id, response.message_id + '_user'),
             assistantMessage.id,
@@ -110,44 +121,46 @@ export const useChatStore = create<ChatState>((set, get) => {
           )
         }));
 
+        // Load conversation list in background
+        get().loadConversations();
+
       } catch (error) {
         // Roll back optimistic updates on error
+        const errorDetails = error instanceof Error ? error.message : JSON.stringify(error);
+        console.error('Send message error:', errorDetails);
         set(state => ({
           messages: state.messages.filter(msg => !isOptimisticMessage(msg.id)),
-          error: error instanceof Error ? error.message : 'Failed to send message',
+          error: errorDetails,
           isStreaming: false 
         }));
       }
     },
 
     appendStreamChunk: (chunk: string) => {
-      set(state => ({
-        streamingContent: state.streamingContent + chunk,
-        messages: state.messages.map((msg, index) => 
-          index === state.messages.length - 1 
-            ? { ...msg, content: state.streamingContent + chunk }
-            : msg
-        )
-      }));
+      const lastMessage = get().messages[get().messages.length - 1];
+      if (lastMessage?.status === 'streaming') {
+        updateMessage(lastMessage.id, {
+          content: lastMessage.content + chunk
+        });
+      }
     },
 
     completeStream: (messageId: string) => {
-      set(state => ({
-        isStreaming: false,
-        streamingContent: '',
-        messages: updateMessageStatus(state.messages, messageId, 'complete')
-      }));
+      updateMessage(messageId, { status: 'complete' });
+      set({ isStreaming: false });
     },
 
     setMessages: (messages: Message[]) => set({ messages }),
     
-    updateLastMessage: (content: string) => set((state) => ({
-      messages: updateMessageContent(state.messages, state.messages[state.messages.length - 1].id, content)
-    })),
+    updateLastMessage: (content: string) => {
+      const lastMessage = get().messages[get().messages.length - 1];
+      if (lastMessage) {
+        updateMessage(lastMessage.id, { content });
+      }
+    },
 
     clearMessages: () => set({ 
       messages: [],
-      streamingContent: '',
       isStreaming: false,
       error: null
     }),
@@ -155,14 +168,14 @@ export const useChatStore = create<ChatState>((set, get) => {
     cancelMessage: async () => {
       try {
         await invoke('cancel_message');
-        set(state => ({
-          isStreaming: false,
-          messages: state.messages.map(msg => 
-            msg.status === 'streaming'
-              ? { ...msg, status: 'error' }
-              : msg
-          )
-        }));
+        const lastMessage = get().messages[get().messages.length - 1];
+        if (lastMessage?.status === 'streaming') {
+          updateMessage(lastMessage.id, {
+            status: 'error',
+            error: 'Message cancelled'
+          });
+        }
+        set({ isStreaming: false });
       } catch (error) {
         console.error('Failed to cancel message:', error);
       }
@@ -230,7 +243,18 @@ export const useChatStore = create<ChatState>((set, get) => {
         // Check if we can create conversation
         StateGuard.assertOperation(guard().canCreateConversation());
 
+        // Always create a new conversation
         const newId = await invoke<string>('clear_chat_history');
+        
+        // Clear current state
+        set({ 
+          currentConversationId: null,
+          messages: [],
+          isStreaming: false,
+          error: null
+        });
+        
+        // Load updated conversation list
         await get().loadConversations();
         return newId;
       } catch (error) {
@@ -253,13 +277,18 @@ export const useChatStore = create<ChatState>((set, get) => {
         // Check if we can delete conversation
         StateGuard.assertOperation(guard().canDeleteConversation(id));
 
-        await invoke('delete_conversation', { conversationId: parseInt(id, 10) });
-        
-        // If deleted current conversation, clear it
+        // First clear local state if it's the current conversation
         if (id === get().currentConversationId) {
-          set({ currentConversationId: null, messages: [] });
+          set({ 
+            currentConversationId: null, 
+            messages: [],
+            isStreaming: false,
+            error: null
+          });
         }
-        
+
+        // Then delete from backend
+        await invoke('delete_conversation', { conversationId: parseInt(id, 10) });
         await get().loadConversations();
       } catch (error) {
         set({ error: error instanceof Error ? error.message : 'Failed to delete conversation' });

@@ -78,56 +78,94 @@ pub fn db_error(e: sqlx::Error) -> ErrorResponse {
     }
 }
 
-/// Gets the latest conversation ID or creates a new one if none exists.
-/// Caches the result in AppState.
+/// Gets a valid conversation ID, creating one if necessary.
+/// This is the single source of truth for conversation state.
 pub async fn get_or_create_conversation_cached(app_state: &AppState) -> Result<i64, ErrorResponse> {
     let db = &app_state.db;
+    let mut tx = db.begin().await.map_err(db_error)?;
 
-    // First check if the cached conversation still exists
-    let cached_id = {
+    // Function to verify conversation exists
+    #[derive(sqlx::FromRow)]
+    struct Exists {
+        exists_flag: i32,
+    }
+
+    async fn verify_conversation(
+        tx: &mut Transaction<'_, Sqlite>,
+        id: i64,
+    ) -> Result<bool, ErrorResponse> {
+        let exists = sqlx::query_as!(
+            Exists,
+            r#"SELECT COUNT(*) as "exists_flag!" FROM conversations WHERE id = ? AND EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversations')"#,
+            id
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        Ok(exists.map_or(false, |e| e.exists_flag > 0))
+    }
+
+    // Try to use cached conversation if it exists and is valid
+    if let Some(cached_id) = {
         let guard = app_state.conversation_id.lock();
         *guard
-    };
-    dbg!("HELLO HELLO HELLO HELLO {}", &cached_id);
-    if let Some(cid) = cached_id {
-        // Verify the conversation exists
-        if let Some(row) =
-            sqlx::query!(r#"SELECT id as "id!" FROM conversations WHERE id = ?"#, cid)
-                .fetch_optional(db)
-                .await
-                .map_err(db_error)?
-        {
-            return Ok(row.id);
+    } {
+        if verify_conversation(&mut tx, cached_id).await? {
+            tx.commit().await.map_err(db_error)?;
+            return Ok(cached_id);
         }
-        // If we get here, the cached conversation doesn't exist anymore
-        // Clear the cache
+    }
+
+    // Clear invalid cache
+    {
+        let mut guard = app_state.conversation_id.lock();
+        *guard = None;
+    }
+
+    // Try to get latest valid conversation
+    let latest = sqlx::query!(
+        r#"SELECT id as "id!" FROM conversations WHERE EXISTS (SELECT 1 FROM messages WHERE conversation_id = conversations.id) ORDER BY updated_at DESC LIMIT 1"#
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_error)?;
+
+    if let Some(row) = latest {
+        let id = row.id;
+        tx.commit().await.map_err(db_error)?;
+
+        // Update cache
         {
             let mut guard = app_state.conversation_id.lock();
-            *guard = None;
+            *guard = Some(id);
         }
+
+        return Ok(id);
     }
 
-    // Try to get the latest conversation
-    if let Some(row) =
-        sqlx::query!(r#"SELECT id as "id!" FROM conversations ORDER BY updated_at DESC LIMIT 1"#)
-            .fetch_optional(db)
-            .await
-            .map_err(db_error)?
+    // Create new conversation within transaction
+    sqlx::query!(
+        r#"INSERT INTO conversations (created_at, updated_at) VALUES (datetime('now'), datetime('now'))"#
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(db_error)?;
+
+    let new_id: i64 = sqlx::query_scalar!("SELECT last_insert_rowid()")
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_error)?
+        .into();
+
+    tx.commit().await.map_err(db_error)?;
+
+    // Update cache with new conversation
     {
         let mut guard = app_state.conversation_id.lock();
-        *guard = Some(row.id);
-        return Ok(row.id);
+        *guard = Some(new_id);
     }
 
-    // No existing conversation found, create a new one
-    let id = create_conversation(db).await?;
-
-    {
-        let mut guard = app_state.conversation_id.lock();
-        *guard = Some(id);
-    }
-
-    Ok(id)
+    Ok(new_id)
 }
 
 pub async fn create_conversation(db: &sqlx::Pool<sqlx::Sqlite>) -> Result<i64, ErrorResponse> {
@@ -250,6 +288,7 @@ pub async fn get_all_conversations(
         })
         .collect())
 }
+
 pub async fn delete_conversation(
     db: &sqlx::Pool<sqlx::Sqlite>,
     conversation_id: i64,

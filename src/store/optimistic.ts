@@ -7,7 +7,7 @@ export const createTempId = () => `temp_${crypto.randomUUID()}`;
 export const createOptimisticMessage = (
   content: string,
   role: string,
-  status: Message['status'] = 'pending'
+  status: Message['status'] = 'complete'
 ): Message => ({
   id: createTempId(),
   content,
