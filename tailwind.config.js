@@ -38,10 +38,10 @@ export default {
   		typography: {
   			DEFAULT: {
   				css: {
-  					'--tw-prose-body': 'hsl(var(--foreground))',
-  					'--tw-prose-headings': 'hsl(var(--foreground))',
+  					'--tw-prose-body': 'hsl(var(--chat-content))',
+  					'--tw-prose-headings': 'hsl(var(--chat-content))',
   					'--tw-prose-links': 'hsl(var(--primary))',
-  					'--tw-prose-bold': 'hsl(var(--foreground))',
+  					'--tw-prose-bold': 'hsl(var(--chat-content))',
   					'--tw-prose-counters': 'hsl(var(--muted-foreground))',
   					'--tw-prose-bullets': 'hsl(var(--muted-foreground))',
   					'--tw-prose-hr': 'hsl(var(--border))',
@@ -49,7 +49,19 @@ export default {
   					'--tw-prose-captions': 'hsl(var(--muted-foreground))',
   					'--tw-prose-code': 'hsl(var(--foreground))',
   					'--tw-prose-th-borders': 'hsl(var(--border))',
-  					'--tw-prose-td-borders': 'hsl(var(--border))'
+  					'--tw-prose-td-borders': 'hsl(var(--border))',
+  					fontSize: '1.125rem',
+  					lineHeight: '1.75',
+  					maxWidth: '65ch',
+  					color: 'inherit',
+  					a: {
+  						textDecoration: 'none',
+  						borderBottom: '1px solid hsl(var(--primary))',
+  						transition: 'border-color 0.2s ease',
+  						'&:hover': {
+  							borderColor: 'transparent'
+  						}
+  					}
   				}
   			}
   		},

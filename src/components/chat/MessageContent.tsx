@@ -70,7 +70,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({
         </time>
       </div>
       <div
-        className="prose prose-slate dark:prose-invert prose-code:before:content-none prose-code:after:content-none max-w-none font-sans leading-relaxed tracking-normal break-words"
+        className="prose prose-slate dark:prose-invert prose-code:before:content-none prose-code:after:content-none max-w-none font-sans leading-relaxed tracking-normal break-words text-[hsl(var(--chat-content))]"
         aria-live={isStreaming ? "polite" : "off"}
       >
         <ReactMarkdown
