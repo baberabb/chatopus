@@ -1,10 +1,8 @@
 use crate::apimodels::{
     core::{
         error::Error,
-        provider::{Provider, ProviderBuilder},
-        request::RequestOptions,
-        types::{Message, StreamResponse},
-        StreamHandler,
+        provider::{Provider, ProviderBuilder, ProviderOptions},
+        types::Message,
     },
     get_provider_registry,
 };
@@ -13,7 +11,7 @@ use crate::database::chat::ErrorResponse;
 use crate::database::chat::{self, ConversationInfo};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, Window};
 use tokio::sync::broadcast;
 
@@ -61,28 +59,6 @@ pub struct CancellationState(pub Arc<parking_lot::Mutex<Option<broadcast::Sender
 impl Default for CancellationState {
     fn default() -> Self {
         Self(Arc::new(parking_lot::Mutex::new(None)))
-    }
-}
-
-struct StreamEventHandler<R: Runtime> {
-    window: Window<R>,
-}
-
-#[async_trait::async_trait]
-impl<R: Runtime> StreamHandler for StreamEventHandler<R> {
-    async fn handle_chunk(&self, text: String) -> std::result::Result<(), Error> {
-        if let Err(e) = self.window.emit("stream-response", &text) {
-            eprintln!("Failed to emit stream response: {}", e);
-        }
-        Ok(())
-    }
-
-    fn handle_done(&self) {
-        // Nothing to do on completion
-    }
-
-    fn handle_error(&self, error: Error) {
-        eprintln!("Stream error: {:?}", error);
     }
 }
 
@@ -140,8 +116,7 @@ pub async fn process_message<R: Runtime>(
 
     // Get provider registry and create provider
     let registry = get_provider_registry();
-    let mut builder = ProviderBuilder::new(provider_type.clone(), api_key);
-    builder = builder.with_parameter("model".to_string(), serde_json::json!(model));
+    let builder = ProviderBuilder::new(provider_type.clone(), api_key).with_model(model);
     let provider = registry.create_provider(&provider_type, builder)?;
 
     // Load conversation history
@@ -155,34 +130,42 @@ pub async fn process_message<R: Runtime>(
     }
 
     // Process message
+    let buffer = Arc::new(Mutex::new(String::new()));
     let full_response = if provider.capabilities().supports_streaming && streaming_enabled {
-        let handler = Box::new(StreamEventHandler {
-            window: window.clone(),
-        });
+        let window_clone = window.clone();
+        let buffer_clone = buffer.clone();
 
         provider
-            .send_message(
+            .send_message_streaming(
                 history,
-                Some(handler),
-                Some(RequestOptions {
-                    streaming: true,
+                ProviderOptions {
+                    stream: true,
                     ..Default::default()
+                },
+                Box::new(move |text| {
+                    let mut buffer = buffer_clone.lock().unwrap();
+                    buffer.push_str(&text);
+                    window_clone
+                        .emit("stream-response", &text)
+                        .map_err(Error::from)
                 }),
-                Some(cancel_rx),
+                cancel_rx,
             )
-            .await?
+            .await?;
+
+        buffer.lock().unwrap().clone()
     } else {
-        provider
+        let response = provider
             .send_message(
                 history,
-                None,
-                Some(RequestOptions {
-                    streaming: false,
+                ProviderOptions {
+                    stream: false,
                     ..Default::default()
-                }),
-                None,
+                },
             )
-            .await?
+            .await?;
+
+        response.content
     };
 
     // Save assistant message

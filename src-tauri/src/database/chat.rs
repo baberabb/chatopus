@@ -1,4 +1,4 @@
-use crate::apimodels::Message;
+use crate::apimodels::core::types::{Message, MessageReactions};
 use crate::AppState;
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
@@ -52,20 +52,22 @@ impl From<DbMessage> for Message {
             .map(|dt| dt.with_timezone(&Local).format("%I:%M %p").to_string())
             .unwrap_or_else(|_| Local::now().format("%I:%M %p").to_string());
 
+        // Parse metadata if it exists
+        let metadata = db_msg.metadata.and_then(|m| serde_json::from_str(&m).ok());
+
         // Extract model from metadata if it exists
-        let model = db_msg.metadata.and_then(|metadata| {
-            serde_json::from_str::<serde_json::Value>(&metadata)
-                .ok()
-                .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from))
-        });
+        let model = metadata
+            .as_ref()
+            .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from));
 
         Message {
             id: db_msg.id.to_string(),
             role: db_msg.role,
             content: db_msg.content,
             timestamp,
-            reactions: Some(crate::apimodels::MessageReactions { thumbs_up: 0 }),
             model,
+            metadata,
+            reactions: Some(MessageReactions { thumbs_up: 0 }),
             original_message_id: db_msg.original_message_id.map(|id| id.to_string()),
         }
     }
@@ -355,13 +357,18 @@ pub async fn save_message(
         .into();
 
     let timestamp = Local::now().format("%I:%M %p").to_string();
+
+    // Parse metadata if provided
+    let metadata = metadata.and_then(|m| serde_json::from_str(&m).ok());
+
     let msg = Message {
         id: message_id.to_string(),
         role: role.to_string(),
         content: content.to_string(),
         timestamp,
-        reactions: Some(crate::apimodels::MessageReactions { thumbs_up: 0 }),
         model: model.map(String::from),
+        metadata,
+        reactions: Some(MessageReactions { thumbs_up: 0 }),
         original_message_id: original_message_id.map(|id| id.to_string()),
     };
 

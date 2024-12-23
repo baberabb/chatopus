@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "message")]
 pub enum Error {
     RequestError(String),
     ResponseError { status: u16, message: String },
@@ -10,6 +12,7 @@ pub enum Error {
     InvalidRequest(String),
     ServerError(String),
     StreamError(String),
+    UnsupportedOperation(String),
     Cancelled,
 }
 
@@ -28,6 +31,7 @@ impl fmt::Display for Error {
             Error::InvalidRequest(msg) => write!(f, "Invalid request: {}", msg),
             Error::ServerError(msg) => write!(f, "Server error: {}", msg),
             Error::StreamError(msg) => write!(f, "Stream error: {}", msg),
+            Error::UnsupportedOperation(msg) => write!(f, "Unsupported operation: {}", msg),
             Error::Cancelled => write!(f, "Operation cancelled"),
         }
     }
@@ -51,6 +55,28 @@ impl From<serde_json::Error> for Error {
     }
 }
 
+impl From<tauri::Error> for Error {
+    fn from(error: tauri::Error) -> Self {
+        Error::StreamError(error.to_string())
+    }
+}
+
+// Implement Into<String> for Error to help with Tauri serialization
+impl From<Error> for String {
+    fn from(error: Error) -> Self {
+        serde_json::to_string(&error).unwrap_or_else(|_| error.to_string())
+    }
+}
+
+// Implement TryFrom<String> for Error to help with Tauri deserialization
+impl TryFrom<String> for Error {
+    type Error = serde_json::Error;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        serde_json::from_str(&s)
+    }
+}
+
 pub trait ErrorExt {
     fn is_retryable(&self) -> bool;
 }
@@ -69,7 +95,7 @@ pub mod handlers {
     use super::*;
     use reqwest::Response;
 
-    pub async fn handle_response_error(response: Response) -> std::result::Result<Response, Error> {
+    pub async fn handle_response_error(response: Response) -> Result<Response, Error> {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response
@@ -91,13 +117,10 @@ pub mod handlers {
         Ok(response)
     }
 
-    pub async fn retry_with_backoff<F, Fut, T>(
-        retries: u32,
-        operation: F,
-    ) -> std::result::Result<T, Error>
+    pub async fn retry_with_backoff<F, Fut, T>(retries: u32, operation: F) -> Result<T, Error>
     where
         F: Fn() -> Fut,
-        Fut: std::future::Future<Output = std::result::Result<T, Error>>,
+        Fut: std::future::Future<Output = Result<T, Error>>,
     {
         let mut attempt = 0;
         loop {

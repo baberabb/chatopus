@@ -1,15 +1,90 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Core request options that apply to all providers
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RequestOptions {
+    /// Whether to use streaming for this request
     pub streaming: bool,
+    /// Maximum tokens to generate
     pub max_tokens: Option<u32>,
+    /// Provider-specific parameters
     pub parameters: Option<HashMap<String, serde_json::Value>>,
+    /// Model to use (if not specified in provider config)
+    pub model: Option<String>,
+    /// Temperature for response randomness (0.0 to 1.0)
+    pub temperature: Option<f32>,
+    /// Top-p sampling (0.0 to 1.0)
+    pub top_p: Option<f32>,
 }
 
+/// Trait for building provider-specific requests
+#[async_trait::async_trait]
+pub trait RequestHandler: Send + Sync {
+    /// The type of request this handler creates
+    type Request: Serialize;
+
+    /// Create a provider-specific request from generic options
+    async fn create_request(
+        &self,
+        options: &RequestOptions,
+        force_stream: Option<bool>,
+    ) -> Result<Self::Request, super::error::Error>;
+
+    /// Get required headers for this provider
+    fn get_headers(&self) -> HashMap<String, String>;
+
+    /// Get the API endpoint for this request
+    fn get_endpoint(&self) -> String;
+
+    /// Get timeout in seconds for this request
+    fn get_timeout(&self) -> u64;
+
+    /// Get number of retry attempts for this request
+    fn get_retry_attempts(&self) -> u32;
+
+    /// Validate parameters for this provider
+    fn validate_parameters(
+        &self,
+        parameters: &HashMap<String, serde_json::Value>,
+    ) -> Result<(), super::error::Error> {
+        Ok(()) // Default implementation accepts all parameters
+    }
+
+    /// Merge and validate parameters from different sources
+    fn merge_parameters(
+        &self,
+        provider_params: Option<&HashMap<String, serde_json::Value>>,
+        custom_params: Option<&HashMap<String, serde_json::Value>>,
+        request_params: Option<&HashMap<String, serde_json::Value>>,
+    ) -> Result<HashMap<String, serde_json::Value>, super::error::Error> {
+        let mut merged = HashMap::new();
+
+        // Start with provider parameters
+        if let Some(params) = provider_params {
+            merged.extend(params.clone());
+        }
+
+        // Override with custom parameters
+        if let Some(params) = custom_params {
+            merged.extend(params.clone());
+        }
+
+        // Finally override with request-specific parameters
+        if let Some(params) = request_params {
+            merged.extend(params.clone());
+        }
+
+        // Validate the merged parameters
+        self.validate_parameters(&merged)?;
+
+        Ok(merged)
+    }
+}
+
+/// Helper for building HTTP requests (providers can use this or implement their own)
 #[derive(Debug)]
-pub struct RequestBuilder {
+pub struct HttpRequestBuilder {
     headers: HashMap<String, String>,
     url: String,
     body: serde_json::Value,
@@ -17,7 +92,7 @@ pub struct RequestBuilder {
     retry_attempts: Option<u32>,
 }
 
-impl RequestBuilder {
+impl HttpRequestBuilder {
     pub fn new(url: impl Into<String>) -> Self {
         Self {
             headers: HashMap::new(),
@@ -51,32 +126,6 @@ impl RequestBuilder {
     pub fn with_retries(mut self, attempts: u32) -> Self {
         self.retry_attempts = Some(attempts);
         self
-    }
-
-    pub fn merge_parameters(
-        &self,
-        provider_params: Option<&HashMap<String, serde_json::Value>>,
-        custom_params: Option<&HashMap<String, serde_json::Value>>,
-        request_params: Option<&HashMap<String, serde_json::Value>>,
-    ) -> HashMap<String, serde_json::Value> {
-        let mut merged = HashMap::new();
-
-        // Start with provider parameters
-        if let Some(params) = provider_params {
-            merged.extend(params.clone());
-        }
-
-        // Override with custom parameters
-        if let Some(params) = custom_params {
-            merged.extend(params.clone());
-        }
-
-        // Finally override with request-specific parameters
-        if let Some(params) = request_params {
-            merged.extend(params.clone());
-        }
-
-        merged
     }
 
     pub fn build(self) -> reqwest::RequestBuilder {

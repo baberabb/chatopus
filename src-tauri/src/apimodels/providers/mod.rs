@@ -1,5 +1,5 @@
-mod anthropic;
-mod registry;
+pub mod anthropic;
+pub mod registry;
 
 pub use anthropic::AnthropicProvider;
 pub use registry::{register_default_providers, ProviderRegistry};
