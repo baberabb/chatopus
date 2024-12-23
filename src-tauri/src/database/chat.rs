@@ -53,12 +53,18 @@ impl From<DbMessage> for Message {
             .unwrap_or_else(|_| Local::now().format("%I:%M %p").to_string());
 
         // Parse metadata if it exists
-        let metadata = db_msg.metadata.and_then(|m| serde_json::from_str(&m).ok());
+        let metadata = db_msg
+            .metadata
+            .and_then(|m| serde_json::from_str::<serde_json::Value>(&m).ok());
 
         // Extract model from metadata if it exists
-        let model = metadata
-            .as_ref()
-            .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(String::from));
+        let model = metadata.as_ref().and_then(|v| {
+            let json_value: &serde_json::Value = v;
+            json_value
+                .get("model")
+                .and_then(|m| m.as_str())
+                .map(String::from)
+        });
 
         Message {
             id: db_msg.id.to_string(),
@@ -359,7 +365,7 @@ pub async fn save_message(
     let timestamp = Local::now().format("%I:%M %p").to_string();
 
     // Parse metadata if provided
-    let metadata = metadata.and_then(|m| serde_json::from_str(&m).ok());
+    let metadata = metadata.and_then(|m| serde_json::from_str::<serde_json::Value>(&m).ok());
 
     let msg = Message {
         id: message_id.to_string(),
