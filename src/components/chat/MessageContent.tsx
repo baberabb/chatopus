@@ -79,13 +79,6 @@ export const MessageContent: React.FC<MessageContentProps> = ({
         >
           {message.content}
         </ReactMarkdown>
-        <span
-          className={`inline-block ${isStreaming ? "animate-pulse" : "opacity-0"}`}
-          aria-hidden="true"
-          style={{ width: "0.5em" }}
-        >
-          ▋
-        </span>
       </div>
       {(message.reactions?.thumbsUp ?? 0) > 0 && (
         <div

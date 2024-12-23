@@ -159,9 +159,6 @@ export function ChatContainer() {
           ) : (
             messages.map((msg, index) => (
               <React.Fragment key={msg.id}>
-                {index > 0 && messages[index - 1].role !== msg.role && (
-                  <div className="h-4" />
-                )}
                 <StreamingMessage
                   message={msg}
                   onReact={handleReact}
