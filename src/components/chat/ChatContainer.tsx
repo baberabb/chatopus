@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { useZustandTheme } from "../../store";
 import { useStreaming } from "../../hooks/useStreaming";
 import { Message } from "../../types";
@@ -67,6 +67,23 @@ export function ChatContainer() {
   const messageListRef = useRef<HTMLDivElement>(null);
   const streaming = useStreaming();
   const isStreaming = streaming.isStreaming();
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+
+  // Handle scroll events
+  useEffect(() => {
+    const container = messageListRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const isAtBottom =
+        container.scrollHeight - container.scrollTop <=
+        container.clientHeight + 100;
+      setShouldAutoScroll(isAtBottom);
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const {
     messages,
@@ -83,6 +100,8 @@ export function ChatContainer() {
 
   // Scroll to bottom when messages change or during streaming
   useEffect(() => {
+    if (!shouldAutoScroll) return;
+
     if (isStreaming) {
       // Smooth scroll during streaming
       scrollToBottom(messageListRef.current, true);
@@ -92,7 +111,7 @@ export function ChatContainer() {
         messages[messages.length - 1]?.role === "user";
       scrollToBottom(messageListRef.current, !isLatestMessageFromUser);
     }
-  }, [messages.length, latestMessageContent, isStreaming]);
+  }, [messages.length, latestMessageContent, isStreaming, shouldAutoScroll]);
 
   const handleReact = (messageId: number) => {
     // TODO: Implement reaction persistence
