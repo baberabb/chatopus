@@ -1,30 +1,30 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT \n            id as \"id!\",\n            conversation_id as \"conversation_id!\",\n            role as \"role!\",\n            content as \"content!\",\n            created_at as \"created_at!\",\n            metadata,\n            original_message_id\n        FROM messages \n        WHERE id = ?\n        ",
+  "query": "\n        SELECT \n            id,\n            conversation_id,\n            role,\n            content,\n            created_at,\n            metadata,\n            original_message_id\n        FROM messages \n        WHERE id = ?\n        ",
   "describe": {
     "columns": [
       {
-        "name": "id!",
+        "name": "id",
         "ordinal": 0,
         "type_info": "Int64"
       },
       {
-        "name": "conversation_id!",
+        "name": "conversation_id",
         "ordinal": 1,
         "type_info": "Int64"
       },
       {
-        "name": "role!",
+        "name": "role",
         "ordinal": 2,
         "type_info": "Text"
       },
       {
-        "name": "content!",
+        "name": "content",
         "ordinal": 3,
         "type_info": "Text"
       },
       {
-        "name": "created_at!",
+        "name": "created_at",
         "ordinal": 4,
         "type_info": "Text"
       },
@@ -52,5 +52,5 @@
       true
     ]
   },
-  "hash": "6b831ff904e1892c681cba9c59d6dd6e4c836fe9f900ab8e37714edcee6cbee2"
+  "hash": "23328f193e9fd093a566a0357bb8bd1f0e80cbefb5b12f383cdc5fe29b963d2e"
 }
