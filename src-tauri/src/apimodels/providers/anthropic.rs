@@ -117,7 +117,10 @@ impl AnthropicProvider {
     ) -> AnthropicRequest {
         let params = options.parameters.clone().unwrap_or_default();
         AnthropicRequest {
-            model: options.model.clone().unwrap_or_else(|| self.name.clone()),
+            model: options
+                .model
+                .clone()
+                .unwrap_or_else(|| "claude-3-sonnet-20240229".to_string()),
             messages: Self::convert_messages(messages),
             max_tokens: options.max_tokens.unwrap_or(1024),
             stream: options.stream,

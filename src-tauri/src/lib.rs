@@ -156,6 +156,9 @@ pub fn run() {
             app.manage(config::ConfigState(parking_lot::Mutex::new(
                 config::AppConfig::default(),
             )));
+            // Initialize API providers
+            apimodels::init()?;
+
             app.manage(AppState {
                 db,
                 conversation_id: parking_lot::Mutex::new(None),
