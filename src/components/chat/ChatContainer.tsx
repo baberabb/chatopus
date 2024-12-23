@@ -106,10 +106,20 @@ export function ChatContainer() {
       // Smooth scroll during streaming
       scrollToBottom(messageListRef.current, true);
     } else {
-      // Instant scroll for user messages, smooth for assistant
+      // For non-streaming cases, add a small delay to allow DOM to update
       const isLatestMessageFromUser =
         messages[messages.length - 1]?.role === "user";
-      scrollToBottom(messageListRef.current, !isLatestMessageFromUser);
+
+      // Only add delay for assistant messages that were previously streaming
+      const wasStreaming =
+        messages[messages.length - 1]?.status === "streaming";
+      if (!isLatestMessageFromUser && wasStreaming) {
+        setTimeout(() => {
+          scrollToBottom(messageListRef.current, true);
+        }, 100); // Small delay to let DOM update
+      } else {
+        scrollToBottom(messageListRef.current, !isLatestMessageFromUser);
+      }
     }
   }, [messages.length, latestMessageContent, isStreaming, shouldAutoScroll]);
 

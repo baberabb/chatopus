@@ -15,20 +15,48 @@ const INITIAL_BUFFER_SIZE: usize = 1024;
 const RESPONSE_BUFFER_SIZE: usize = 4096;
 const API_ENDPOINT: &str = "https://api.anthropic.com/v1/messages";
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug, Clone)]
 struct AnthropicMessage {
     role: String,
     content: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct AnthropicRequest {
     model: String,
     messages: Vec<AnthropicMessage>,
     max_tokens: u32,
     stream: bool,
-    #[serde(flatten)]
-    parameters: Option<std::collections::HashMap<String, serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<i32>,
+}
+
+impl AnthropicRequest {
+    fn from_chat_request(request: ChatRequest, force_stream: Option<bool>) -> Self {
+        let params = request.parameters.unwrap_or_default();
+        Self {
+            model: request.model,
+            messages: AnthropicProvider::convert_messages(request.messages),
+            max_tokens: request.max_tokens,
+            stream: force_stream.unwrap_or(request.stream),
+            temperature: params
+                .get("temperature")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32),
+            top_p: params
+                .get("top_p")
+                .and_then(|v| v.as_f64())
+                .map(|v| v as f32),
+            top_k: params
+                .get("top_k")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -99,11 +127,13 @@ impl AnthropicProvider {
     }
 
     async fn make_request(&self, request: &AnthropicRequest) -> ProviderResult<reqwest::Response> {
-        // Debug log the request parameters
+        // Debug log the request
         #[cfg(debug_assertions)]
         eprintln!(
-            "ANTHROPIC REQUEST PARAMS: {}",
-            serde_json::to_string_pretty(&request.parameters).unwrap_or_default()
+            "ANTHROPIC REQUEST: {}",
+            serde_json::to_string_pretty(&request)
+                .map_err(|e| e.to_string())
+                .unwrap_or_default()
         );
 
         self.base
@@ -221,13 +251,7 @@ impl ChatProvider for AnthropicProvider {
         callback: StreamCallback,
         mut cancel_token: broadcast::Receiver<()>,
     ) -> ProviderResult<String> {
-        let anthropic_request = AnthropicRequest {
-            model: request.model,
-            messages: Self::convert_messages(request.messages),
-            max_tokens: request.max_tokens,
-            stream: true,
-            parameters: request.parameters,
-        };
+        let anthropic_request = AnthropicRequest::from_chat_request(request, Some(true));
 
         let mut full_response = String::with_capacity(RESPONSE_BUFFER_SIZE);
         let mut buffer = Vec::with_capacity(INITIAL_BUFFER_SIZE);
@@ -262,19 +286,12 @@ impl ChatProvider for AnthropicProvider {
         Ok(full_response)
     }
 
-    async fn send_message_blocking(&self, request: ChatRequest) -> ProviderResult<ChatResponse> {
-        let anthropic_request = AnthropicRequest {
-            model: request.model.clone(),
-            messages: Self::convert_messages(request.messages),
-            max_tokens: request
-                .parameters
-                .as_ref()
-                .and_then(|p| p.get("max_tokens"))
-                .and_then(|v| v.as_u64())
-                .unwrap_or(1024) as u32,
-            stream: false,
-            parameters: request.parameters,
-        };
+    async fn send_message_blocking(
+        &self,
+        mut request: ChatRequest,
+    ) -> ProviderResult<ChatResponse> {
+        let model = request.model.clone();
+        let anthropic_request = AnthropicRequest::from_chat_request(request, Some(false));
 
         let response =
             BaseProvider::handle_response_error(self.make_request(&anthropic_request).await?)
@@ -293,7 +310,7 @@ impl ChatProvider for AnthropicProvider {
 
         Ok(ChatResponse {
             content,
-            model: Some(request.model),
+            model: Some(model),
             usage: None,
         })
     }
