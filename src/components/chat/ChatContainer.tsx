@@ -144,7 +144,7 @@ export function ChatContainer() {
 
         {/* Message list */}
         <div
-          className="flex-1 min-h-0 overflow-y-auto py-4 chat-messages"
+          className="flex-1 min-h-0 overflow-y-auto pt-4 pb-24 chat-messages"
           style={{ backgroundColor: theme.background }}
           ref={messageListRef}
         >

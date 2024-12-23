@@ -25,7 +25,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({
   icon,
   label,
 }) => {
-  const baseClasses = "p-3 transition-colors";
+  const baseClasses = "px-4 transition-colors";
   const variantClasses = {
     default: "text-gray-400 hover:text-white disabled:hover:text-gray-400",
     danger: "text-red-400 hover:text-red-500",
@@ -66,7 +66,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     const adjustTextareaHeight = () => {
       const textarea = textareaRef.current;
       if (textarea) {
-        textarea.style.height = "44px";
+        textarea.style.height = "22px";
         const scrollHeight = textarea.scrollHeight;
         textarea.style.height = Math.min(scrollHeight, 200) + "px";
       }
@@ -77,67 +77,57 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     }, [input]);
 
     return (
-      <div
-        className="absolute bottom-0 left-0 right-0 bg-opacity-80 backdrop-blur-sm"
-        style={{
-          backgroundColor: theme.background,
-          borderTop: `1px solid ${theme.border}`,
-        }}
-      >
+      <div className="absolute bottom-0 left-0 right-0 px-4 pb-6">
         <form
-          className="p-4"
+          className="flex items-center h-11 rounded-lg bg-opacity-60"
+          style={{
+            backgroundColor: theme.surface,
+            boxShadow: `0 2px 10px ${theme.shadowColor}10`,
+          }}
           onSubmit={(e) => {
             e.preventDefault();
             handleSend();
           }}
         >
-          <div
-            className="flex items-end rounded-lg"
-            style={{
-              backgroundColor: theme.surface,
-              boxShadow: `0 2px 4px -2px ${theme.shadowColor}, 0 1px 2px -1px ${theme.shadowColor}`,
+          <ActionButton
+            icon={<Paperclip size={22} />}
+            label="Attach file"
+            disabled={isStreaming}
+          />
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
             }}
-          >
+            className="flex-1 bg-transparent px-4 focus:outline-none resize-none h-[22px] font-sans leading-[22px] overflow-y-auto my-2"
+            style={{ color: theme.text }}
+            placeholder="Type a message..."
+            rows={1}
+            disabled={isStreaming}
+            aria-label="Message input"
+          />
+          {isCancellable && onCancel ? (
             <ActionButton
-              icon={<Paperclip size={20} />}
-              label="Attach file"
-              disabled={isStreaming}
+              icon={<XCircle size={22} />}
+              onClick={onCancel}
+              variant="danger"
+              label="Cancel message"
             />
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              className="flex-1 bg-transparent p-3 focus:outline-none resize-none min-h-[44px] font-sans leading-tight overflow-y-auto"
-              style={{ color: theme.text }}
-              placeholder="Type a message..."
-              rows={1}
+          ) : (
+            <ActionButton
+              icon={
+                isStreaming ? <Zap size={22} /> : <CornerRightUp size={22} />
+              }
+              onClick={handleSend}
               disabled={isStreaming}
-              aria-label="Message input"
+              label={isStreaming ? "Processing" : "Send message"}
             />
-            {isCancellable && onCancel ? (
-              <ActionButton
-                icon={<XCircle size={20} />}
-                onClick={onCancel}
-                variant="danger"
-                label="Cancel message"
-              />
-            ) : (
-              <ActionButton
-                icon={
-                  isStreaming ? <Zap size={20} /> : <CornerRightUp size={20} />
-                }
-                onClick={handleSend}
-                disabled={isStreaming}
-                label={isStreaming ? "Processing" : "Send message"}
-              />
-            )}
-          </div>
+          )}
         </form>
       </div>
     );
