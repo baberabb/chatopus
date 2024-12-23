@@ -1,12 +1,13 @@
 use super::error::Error;
+use super::types::ContentBlock;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 /// Event emitted during streaming responses
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamEvent {
-    /// The text chunk from the stream
-    pub text: String,
+    /// The content blocks from the stream
+    pub content: Vec<ContentBlock>,
     /// Whether this is the final event in the stream
     pub done: bool,
 }
@@ -33,21 +34,21 @@ pub trait StreamHandler: Send + Sync {
     async fn handle_event(&self, event: StreamEvent) -> Result<(), Error>;
 }
 
-/// Simple stream handler that accumulates text in a buffer
+/// Simple stream handler that accumulates content blocks in a buffer
 pub struct DefaultStreamHandler {
-    buffer: Mutex<String>,
+    buffer: Mutex<Vec<ContentBlock>>,
 }
 
 impl DefaultStreamHandler {
     /// Create a new default stream handler
     pub fn new() -> Self {
         Self {
-            buffer: Mutex::new(String::new()),
+            buffer: Mutex::new(Vec::new()),
         }
     }
 
-    /// Get the accumulated text buffer
-    pub async fn get_buffer(&self) -> String {
+    /// Get the accumulated content blocks
+    pub async fn get_buffer(&self) -> Vec<ContentBlock> {
         self.buffer.lock().await.clone()
     }
 }
@@ -55,9 +56,9 @@ impl DefaultStreamHandler {
 #[async_trait::async_trait]
 impl StreamHandler for DefaultStreamHandler {
     async fn handle_event(&self, event: StreamEvent) -> Result<(), Error> {
-        if !event.text.is_empty() {
+        if !event.content.is_empty() {
             let mut buffer = self.buffer.lock().await;
-            buffer.push_str(&event.text);
+            buffer.extend(event.content);
         }
         Ok(())
     }

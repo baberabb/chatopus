@@ -12,7 +12,16 @@ use crate::apimodels::core::{
 const DEFAULT_API_VERSION: &str = "2023-06-01";
 const API_ENDPOINT: &str = "https://api.anthropic.com/v1/messages";
 
-#[derive(Serialize, Debug)]
+use crate::apimodels::core::types::ContentBlock as CoreContentBlock;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AnthropicContentBlock {
+    #[serde(rename = "type")]
+    block_type: String,
+    text: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 struct AnthropicMessage {
     role: String,
     content: String,
@@ -46,12 +55,7 @@ struct Delta {
 
 #[derive(Deserialize, Debug)]
 struct NonStreamingResponse {
-    content: Vec<ContentBlock>,
-}
-
-#[derive(Deserialize, Debug)]
-struct ContentBlock {
-    text: String,
+    content: Vec<AnthropicContentBlock>,
 }
 
 pub struct AnthropicProvider {
@@ -103,9 +107,19 @@ impl AnthropicProvider {
     fn convert_messages(messages: Vec<Message>) -> Vec<AnthropicMessage> {
         messages
             .into_iter()
-            .map(|msg| AnthropicMessage {
-                role: msg.role,
-                content: msg.content,
+            .map(|msg| {
+                // Convert content blocks to text
+                let text = msg
+                    .content
+                    .into_iter()
+                    .filter_map(|block| block.text)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
+                AnthropicMessage {
+                    role: msg.role,
+                    content: text,
+                }
             })
             .collect()
     }
@@ -190,8 +204,12 @@ impl Provider for AnthropicProvider {
         let content = response_data
             .content
             .into_iter()
-            .map(|block| block.text)
-            .collect::<String>();
+            .map(|block| CoreContentBlock {
+                r#type: block.block_type,
+                text: block.text,
+                image_url: None,
+            })
+            .collect();
 
         Ok(ChatResponse {
             content,

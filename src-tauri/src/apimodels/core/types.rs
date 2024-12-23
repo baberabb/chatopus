@@ -1,6 +1,21 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// A block of content in a message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentBlock {
+    /// Type of content (e.g., "text", "image")
+    pub r#type: String,
+
+    /// Text content if type is "text"
+    #[serde(default)]
+    pub text: Option<String>,
+
+    /// Image URL if type is "image"
+    #[serde(default)]
+    pub image_url: Option<String>,
+}
+
 /// A message in a chat conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
@@ -10,8 +25,8 @@ pub struct Message {
     /// Role of the message sender (e.g., "user", "assistant")
     pub role: String,
 
-    /// Content of the message
-    pub content: String,
+    /// Content blocks of the message
+    pub content: Vec<ContentBlock>,
 
     /// Timestamp of when the message was created
     pub timestamp: String,
@@ -40,8 +55,8 @@ pub struct MessageReactions {
 /// Response from a chat provider
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatResponse {
-    /// Generated response content
-    pub content: String,
+    /// Generated response content blocks
+    pub content: Vec<ContentBlock>,
 
     /// Model that generated the response
     pub model: Option<String>,
@@ -69,8 +84,8 @@ pub struct TokenUsage {
 /// A streaming response chunk
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamResponse {
-    /// The text chunk
-    pub text: String,
+    /// The content block chunk
+    pub content: ContentBlock,
 
     /// Whether this is the final chunk
     pub is_done: bool,

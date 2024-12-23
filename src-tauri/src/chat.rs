@@ -2,7 +2,7 @@ use crate::apimodels::{
     core::{
         error::Error,
         provider::{Provider, ProviderBuilder, ProviderOptions},
-        types::Message,
+        types::{ContentBlock, Message},
     },
     get_provider_registry,
 };
@@ -17,7 +17,7 @@ use tokio::sync::broadcast;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Response {
-    pub reply: String,
+    pub reply: Vec<ContentBlock>,
     pub user_message_id: i64,
     pub assistant_message_id: i64,
     pub conversation_id: i64,
@@ -107,7 +107,11 @@ pub async fn process_message<R: Runtime>(
         &mut tx,
         conversation_id,
         "user",
-        &request.message,
+        vec![ContentBlock {
+            r#type: "text".to_string(),
+            text: Some(request.message.clone()),
+            image_url: None,
+        }],
         None,
         None,
     )
@@ -130,7 +134,7 @@ pub async fn process_message<R: Runtime>(
     }
 
     // Process message
-    let buffer = Arc::new(Mutex::new(String::new()));
+    let buffer = Arc::new(Mutex::new(Vec::new()));
     let full_response = if provider.capabilities().supports_streaming && streaming_enabled {
         let window_clone = window.clone();
         let buffer_clone = buffer.clone();
@@ -142,11 +146,30 @@ pub async fn process_message<R: Runtime>(
                     stream: true,
                     ..Default::default()
                 },
-                Box::new(move |text| {
-                    let mut buffer = buffer_clone.lock().unwrap();
-                    buffer.push_str(&text);
+                Box::new(move |chunk| {
+                    // 1. Update the buffer with content blocks
+                    {
+                        let mut buffer = buffer_clone.lock().unwrap();
+                        if buffer.is_empty() {
+                            // First chunk - create new content block
+                            buffer.push(ContentBlock {
+                                r#type: "text".to_string(),
+                                text: Some(chunk.to_string()),
+                                image_url: None,
+                            });
+                        } else {
+                            // Append to existing content block
+                            if let Some(block) = buffer.first_mut() {
+                                if let Some(text) = &mut block.text {
+                                    text.push_str(&chunk);
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Send raw text chunk to frontend
                     window_clone
-                        .emit("stream-response", &text)
+                        .emit("stream-response", chunk)
                         .map_err(Error::from)
                 }),
                 cancel_rx,
@@ -174,7 +197,7 @@ pub async fn process_message<R: Runtime>(
         &mut tx,
         conversation_id,
         "assistant",
-        &full_response,
+        full_response.clone(),
         Some(&provider_type),
         None,
     )
@@ -308,7 +331,11 @@ pub async fn edit_message(
         &mut tx,
         current.conversation_id,
         &current.role,
-        &new_content,
+        vec![ContentBlock {
+            r#type: "text".to_string(),
+            text: Some(new_content),
+            image_url: None,
+        }],
         None,
         Some(current.id),
     )

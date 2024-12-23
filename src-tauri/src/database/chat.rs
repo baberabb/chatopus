@@ -23,12 +23,14 @@ pub struct ConversationInfo {
 }
 
 // Database models
+use crate::apimodels::core::types::ContentBlock;
+
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct DbMessage {
     pub id: i64,
     pub conversation_id: i64,
     pub role: String,
-    pub content: String,
+    pub content: String, // JSON string of Vec<ContentBlock>
     pub created_at: String,
     pub metadata: Option<String>,
     pub original_message_id: Option<i64>, // Added for versioning
@@ -66,10 +68,20 @@ impl From<DbMessage> for Message {
                 .map(String::from)
         });
 
+        // Parse content as Vec<ContentBlock>, fallback to text block if parsing fails
+        let content =
+            serde_json::from_str::<Vec<ContentBlock>>(&db_msg.content).unwrap_or_else(|_| {
+                vec![ContentBlock {
+                    r#type: "text".to_string(),
+                    text: Some(db_msg.content),
+                    image_url: None,
+                }]
+            });
+
         Message {
             id: db_msg.id.to_string(),
             role: db_msg.role,
-            content: db_msg.content,
+            content,
             timestamp,
             model,
             metadata,
@@ -319,9 +331,9 @@ pub async fn save_message(
     tx: &mut Transaction<'_, Sqlite>,
     conversation_id: i64,
     role: &str,
-    content: &str,
+    content: Vec<ContentBlock>,
     model: Option<&str>,
-    original_message_id: Option<i64>, // Added this parameter
+    original_message_id: Option<i64>,
 ) -> Result<Message, ErrorResponse> {
     // Update conversation timestamp
     sqlx::query!(
@@ -339,6 +351,12 @@ pub async fn save_message(
     // Create metadata JSON if model is provided
     let metadata = model.map(|m| format!(r#"{{"model":"{}"}}"#, m));
 
+    // Serialize content blocks to JSON string
+    let content_json = serde_json::to_string(&content).map_err(|e| ErrorResponse {
+        message: "Failed to serialize content".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
     // Insert the message with optional original_message_id
     sqlx::query!(
         r#"
@@ -347,7 +365,7 @@ pub async fn save_message(
         "#,
         conversation_id,
         role,
-        content,
+        content_json,
         metadata,
         original_message_id
     )
@@ -370,7 +388,7 @@ pub async fn save_message(
     let msg = Message {
         id: message_id.to_string(),
         role: role.to_string(),
-        content: content.to_string(),
+        content: content,
         timestamp,
         model: model.map(String::from),
         metadata,
