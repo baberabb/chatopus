@@ -1,9 +1,10 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useZustandTheme } from "../../store";
 import { useStreaming } from "../../hooks/useStreaming";
-import { Message, FileAttachment } from "../../types";
+import { Message, FileAttachment, Conversation } from "../../types";
 import { useModel } from "../../contexts/ModelContext";
 import ErrorBoundary from "../ErrorBoundary";
+import { SystemMessageEditor } from "./SystemMessageEditor";
 import { InputArea } from "./InputArea";
 import { ErrorDisplay } from "../ErrorDisplay";
 import { MessageBlock } from "./MessageBlock";
@@ -88,12 +89,18 @@ export function ChatContainer() {
   const {
     messages,
     currentConversationId,
+    conversations,
     isLoading,
     error,
     sendMessage,
     handleEdit,
     cancelMessage,
+    updateConversation,
   } = useChat();
+
+  const currentConversation = conversations.find(
+    (c) => c.id === currentConversationId
+  );
 
   // Get the latest message content for scroll tracking
   const latestMessageContent = messages[messages.length - 1]?.content || "";
@@ -152,6 +159,21 @@ export function ChatContainer() {
           </div>
         </div>
 
+        {/* System message editor */}
+        {currentConversationId && (
+          <SystemMessageEditor
+            systemMessage={currentConversation?.systemMessage}
+            onUpdate={(message) => {
+              if (currentConversationId) {
+                updateConversation(currentConversationId, {
+                  systemMessage: message,
+                });
+              }
+            }}
+            disabled={isLoading || isStreaming}
+          />
+        )}
+
         {/* Message list */}
         <div
           className="flex-1 min-h-0 overflow-y-auto pt-4 pb-24 chat-messages"
@@ -187,7 +209,13 @@ export function ChatContainer() {
                   .reverse()
                   .find((msg) => msg.role === "user");
                 if (lastUserMessage) {
-                  sendMessage(lastUserMessage.content);
+                  const content =
+                    typeof lastUserMessage.content === "string"
+                      ? lastUserMessage.content
+                      : lastUserMessage.content
+                          .map((block) => block.text || "")
+                          .join("\n");
+                  sendMessage(content);
                 }
               }}
             />

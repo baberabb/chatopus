@@ -130,6 +130,7 @@ pub fn run() {
             chat::delete_conversation,
             chat::cancel_message,
             chat::edit_message,
+            chat::update_conversation,
             config::get_config,
             config::update_config,
             config::update_provider_settings,

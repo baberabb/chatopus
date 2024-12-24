@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     settings TEXT,  -- JSON string for conversation settings
     parent_id INTEGER,  -- Points to original conversation
     version INTEGER NOT NULL DEFAULT 1,  -- Tracks version number
+    system_message TEXT,  -- System message for the conversation
     FOREIGN KEY (model_id) REFERENCES models(id),
     FOREIGN KEY (parent_id) REFERENCES conversations(id)
 );

@@ -49,6 +49,7 @@ export interface Conversation {
   model: string;
   messageCount: number;
   timestamp: string;
+  systemMessage?: string;
 }
 
 // Provider types

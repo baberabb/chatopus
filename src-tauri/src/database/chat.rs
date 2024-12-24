@@ -20,6 +20,7 @@ pub struct ConversationInfo {
     pub timestamp: String,
     pub parent_id: Option<i64>, // Added for versioning
     pub version: i64,           // Added for versioning
+    pub system_message: Option<String>,
 }
 
 // Database models
@@ -46,6 +47,7 @@ pub struct ConversationRow {
     pub timestamp: String,      // COALESCE ensures non-null
     pub parent_id: Option<i64>, // Added for versioning
     pub version: i64,           // Added for versioning
+    pub system_message: Option<String>,
 }
 
 impl From<DbMessage> for Message {
@@ -165,7 +167,7 @@ pub async fn get_or_create_conversation_cached(app_state: &AppState) -> Result<i
 
     // Create new conversation within transaction
     sqlx::query!(
-        r#"INSERT INTO conversations (created_at, updated_at) VALUES (datetime('now'), datetime('now'))"#
+        r#"INSERT INTO conversations (created_at, updated_at, system_message) VALUES (datetime('now'), datetime('now'), NULL)"#
     )
     .execute(&mut *tx)
     .await
@@ -192,8 +194,8 @@ pub async fn create_conversation(db: &sqlx::Pool<sqlx::Sqlite>) -> Result<i64, E
     // Create a new conversation
     sqlx::query!(
         r#"
-        INSERT INTO conversations (created_at, updated_at)
-        VALUES (datetime('now'), datetime('now'))
+        INSERT INTO conversations (created_at, updated_at, system_message)
+        VALUES (datetime('now'), datetime('now'), NULL)
         "#
     )
     .execute(db)
@@ -251,6 +253,7 @@ pub async fn get_all_conversations(
             c.id as "id!",
             c.parent_id as "parent_id?",  -- Added
             c.version as "version!",       -- Added
+            c.system_message as "system_message?",
             COALESCE(
                 (SELECT content FROM messages 
                 WHERE conversation_id = c.id 
@@ -305,8 +308,37 @@ pub async fn get_all_conversations(
             timestamp: row.timestamp,
             parent_id: row.parent_id,
             version: row.version,
+            system_message: row.system_message,
         })
         .collect())
+}
+
+pub async fn update_conversation(
+    db: &sqlx::Pool<sqlx::Sqlite>,
+    conversation_id: i64,
+    updates: serde_json::Value,
+) -> Result<(), ErrorResponse> {
+    let mut tx = db.begin().await.map_err(db_error)?;
+
+    // Extract fields from updates
+    if let Some(system_message) = updates.get("systemMessage").and_then(|v| v.as_str()) {
+        sqlx::query!(
+            r#"
+            UPDATE conversations
+            SET system_message = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+            "#,
+            system_message,
+            conversation_id
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
+    }
+
+    tx.commit().await.map_err(db_error)?;
+    Ok(())
 }
 
 pub async fn delete_conversation(
@@ -418,6 +450,16 @@ pub async fn create_conversation_version(
 
     let new_version = parent.version + 1;
 
+    // Get system message from parent
+    let parent_system_message = sqlx::query!(
+        r#"SELECT system_message FROM conversations WHERE id = ?"#,
+        parent_id
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_error)?
+    .system_message;
+
     // Create new version
     let result = sqlx::query!(
         r#"
@@ -426,15 +468,17 @@ pub async fn create_conversation_version(
             version, 
             model_id, 
             settings,
+            system_message,
             created_at,
             updated_at
         )
-        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         "#,
         parent_id,
         new_version,
         parent.model_id,
         parent.settings,
+        parent_system_message,
     )
     .execute(&mut **tx)
     .await

@@ -348,6 +348,20 @@ pub async fn edit_message(
 }
 
 #[tauri::command]
+pub async fn update_conversation(
+    conversation_id: i64,
+    updates: serde_json::Value,
+    app_handle: AppHandle,
+) -> std::result::Result<(), String> {
+    let app_state = app_handle.state::<AppState>();
+    let db = &app_state.db;
+
+    chat::update_conversation(db, conversation_id, updates)
+        .await
+        .map_err(|e| e.message)
+}
+
+#[tauri::command]
 pub async fn delete_conversation(
     conversation_id: i64,
     app_handle: AppHandle,

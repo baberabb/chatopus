@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT system_message FROM conversations WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "system_message",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "989cc66a569b781b16356e1b842f5fa2183ac295672e5c2f873bcc5ddaf0623c"
+}
