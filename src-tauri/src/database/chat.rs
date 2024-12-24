@@ -109,7 +109,7 @@ pub async fn get_or_create_conversation_cached(app_state: &AppState) -> Result<i
     // Function to verify conversation exists
     #[derive(sqlx::FromRow)]
     struct Exists {
-        exists_flag: i32,
+        exists_flag: i64,
     }
 
     async fn verify_conversation(
@@ -167,7 +167,7 @@ pub async fn get_or_create_conversation_cached(app_state: &AppState) -> Result<i
 
     // Create new conversation within transaction
     sqlx::query!(
-        r#"INSERT INTO conversations (created_at, updated_at, system_message) VALUES (datetime('now'), datetime('now'), NULL)"#
+        r#"INSERT INTO conversations (created_at, updated_at) VALUES (datetime('now'), datetime('now'))"#
     )
     .execute(&mut *tx)
     .await
@@ -461,7 +461,7 @@ pub async fn create_conversation_version(
     .system_message;
 
     // Create new version
-    let result = sqlx::query!(
+    sqlx::query!(
         r#"
         INSERT INTO conversations (
             parent_id, 
@@ -484,5 +484,12 @@ pub async fn create_conversation_version(
     .await
     .map_err(db_error)?;
 
-    Ok(result.last_insert_rowid())
+    // Get and return the ID of the newly inserted conversation
+    let id = sqlx::query!(r#"SELECT last_insert_rowid() as id"#)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_error)?
+        .id;
+
+    Ok(id)
 }
