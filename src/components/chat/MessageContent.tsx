@@ -127,7 +127,9 @@ export const MessageContent: React.FC<MessageContentProps> = ({
           remarkPlugins={markdownPlugins}
           components={markdownComponents}
         >
-          {message.content}
+          {Array.isArray(message.content)
+            ? message.content[0]?.text || ""
+            : message.content}
         </ReactMarkdown>
       </div>
       {(message.reactions?.thumbsUp ?? 0) > 0 && (

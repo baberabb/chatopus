@@ -20,9 +20,15 @@ export interface FileAttachment {
   previewUrl?: string;
 }
 
+export interface ContentBlock {
+  type: string;
+  text?: string;
+  image_url?: string;
+}
+
 export interface Message {
   id: number;
-  content: string;
+  content: string | ContentBlock[];
   role: string;
   timestamp: string;
   model?: string;

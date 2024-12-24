@@ -1,8 +1,10 @@
 import React, { useRef, useEffect } from "react";
 import { Check, X } from "lucide-react";
 
+import { ContentBlock } from "../../types";
+
 interface MessageEditorProps {
-  content: string;
+  content: string | ContentBlock[];
   onSave: (content: string) => void;
   onCancel: () => void;
 }
@@ -12,7 +14,10 @@ export const MessageEditor: React.FC<MessageEditorProps> = ({
   onSave,
   onCancel,
 }) => {
-  const [editContent, setEditContent] = React.useState(content);
+  const initialContent = Array.isArray(content)
+    ? content[0]?.text || ""
+    : content;
+  const [editContent, setEditContent] = React.useState(initialContent);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {

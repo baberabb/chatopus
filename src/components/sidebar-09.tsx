@@ -132,6 +132,12 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
     e.stopPropagation(); // Prevent chat selection when clicking delete
     try {
       await deleteConversation(chatId);
+      // If we're deleting the current conversation, create a new one
+      if (currentConversationId === chatId) {
+        const newId = await createConversation();
+        await setCurrentConversationId(newId);
+      }
+      await loadConversations(); // Reload the list after deletion
     } catch (err) {
       console.error("Error deleting conversation:", err);
     }
