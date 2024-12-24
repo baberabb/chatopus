@@ -7,7 +7,7 @@ import { useCustomParameters } from "../../hooks/useCustomParameters";
 import { ProviderCard } from "./ProviderCard";
 import { CustomParameterForm } from "./CustomParameterForm";
 import { providerConfigs } from "../../config/providers";
-import { ProviderType } from "../../types";
+import { ProviderType, ProviderSettings } from "../../types";
 
 export function ModelSettings() {
   const {
@@ -20,6 +20,23 @@ export function ModelSettings() {
     reloadConfig,
   } = useProviderSettings();
 
+  // Ensure we have a valid settings object
+  const safeSettings = React.useMemo(() => {
+    if (!settings) return {};
+    return Object.keys(providerConfigs).reduce(
+      (acc, provider) => {
+        acc[provider] = settings[provider] || {
+          api_key: "",
+          model: providerConfigs[provider].models[0],
+          parameters: {},
+          customParameters: {},
+        };
+        return acc;
+      },
+      {} as Record<string, ProviderSettings>
+    );
+  }, [settings]);
+
   const {
     showForm: showCustomParamForm,
     setShowForm: setShowCustomParamForm,
@@ -27,19 +44,23 @@ export function ModelSettings() {
     removeCustomParameter,
   } = useCustomParameters(
     activeProvider as ProviderType,
-    (provider, newSettings) => {
-      if (settings[provider]) {
-        const updatedSettings = {
-          ...settings[provider],
-          ...newSettings,
-        };
-        updateProviderSetting(
-          provider,
-          "customParameters",
-          updatedSettings.customParameters
-        );
-      }
-    }
+    React.useCallback(
+      (provider, newSettings) => {
+        const providerSettings = safeSettings[provider];
+        if (providerSettings) {
+          const updatedSettings = {
+            ...providerSettings,
+            ...newSettings,
+          };
+          updateProviderSetting(
+            provider,
+            "customParameters",
+            updatedSettings.customParameters
+          );
+        }
+      },
+      [safeSettings, updateProviderSetting]
+    )
   );
 
   if (loading) {
@@ -50,17 +71,17 @@ export function ModelSettings() {
     );
   }
 
-  if (error || !settings) {
-    return (
-      <div className="p-6 text-red-500">
-        Error: {error || "Model configuration not found"}
-      </div>
-    );
+  if (error) {
+    return <div className="p-6 text-red-500">Error: {error}</div>;
   }
 
   const handleSaveSettings = async (provider: ProviderType) => {
     try {
-      const providerSettings = settings[provider];
+      const providerSettings = safeSettings[provider];
+      if (!providerSettings) {
+        console.error("Provider settings not found");
+        return;
+      }
       // Update each setting individually
       await Promise.all([
         updateProviderSetting(provider, "api_key", providerSettings.api_key),
@@ -106,7 +127,7 @@ export function ModelSettings() {
               <div className="space-y-6">
                 <ProviderCard
                   provider={provider as ProviderType}
-                  settings={settings[provider]}
+                  settings={safeSettings[provider]}
                   isActive={provider === activeProvider}
                   onSelect={() => setProvider(provider as ProviderType)}
                   onSettingChange={(key, value) =>

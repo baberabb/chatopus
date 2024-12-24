@@ -41,6 +41,8 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         let mut providers = HashMap::new();
+
+        // Anthropic provider
         providers.insert(
             "anthropic".to_string(),
             ProviderSettings {
@@ -51,6 +53,61 @@ impl Default for AppConfig {
                     params.insert("max_tokens".to_string(), json!(1024));
                     params.insert("streaming".to_string(), json!(true));
                     params.insert("temperature".to_string(), json!(0.7));
+                    params.insert("top_p".to_string(), json!(1.0));
+                    params.insert("top_k".to_string(), json!(5));
+                    params
+                },
+                custom_parameters: None,
+                api_version: None,
+                base_url: None,
+                timeout_seconds: Some(120),
+                retry_attempts: Some(3),
+                additional_headers: None,
+            },
+        );
+
+        // OpenAI provider
+        providers.insert(
+            "openai".to_string(),
+            ProviderSettings {
+                api_key: String::new(),
+                model: "gpt-4-turbo-preview".to_string(),
+                parameters: {
+                    let mut params = HashMap::new();
+                    params.insert("max_tokens".to_string(), json!(1024));
+                    params.insert("streaming".to_string(), json!(true));
+                    params.insert("temperature".to_string(), json!(0.7));
+                    params.insert("top_p".to_string(), json!(1.0));
+                    params.insert("presence_penalty".to_string(), json!(0.0));
+                    params.insert("frequency_penalty".to_string(), json!(0.0));
+                    params.insert("tool_calls".to_string(), json!(false));
+                    params.insert("tool_choice".to_string(), json!("none"));
+                    params
+                },
+                custom_parameters: None,
+                api_version: None,
+                base_url: None,
+                timeout_seconds: Some(120),
+                retry_attempts: Some(3),
+                additional_headers: None,
+            },
+        );
+
+        // OpenRouter provider
+        providers.insert(
+            "openrouter".to_string(),
+            ProviderSettings {
+                api_key: String::new(),
+                model: "anthropic/claude-3-opus".to_string(),
+                parameters: {
+                    let mut params = HashMap::new();
+                    params.insert("max_tokens".to_string(), json!(1024));
+                    params.insert("streaming".to_string(), json!(true));
+                    params.insert("temperature".to_string(), json!(0.7));
+                    params.insert("top_p".to_string(), json!(1.0));
+                    params.insert("top_k".to_string(), json!(5));
+                    params.insert("presence_penalty".to_string(), json!(0.0));
+                    params.insert("frequency_penalty".to_string(), json!(0.0));
                     params
                 },
                 custom_parameters: None,

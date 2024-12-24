@@ -120,6 +120,14 @@ export function ProviderCard({
 }: ProviderCardProps) {
   const providerConfig = providerConfigs[provider];
 
+  // Ensure we have valid settings object with defaults
+  const safeSettings = {
+    api_key: settings?.api_key ?? "",
+    model: settings?.model ?? providerConfig.models[0],
+    parameters: settings?.parameters ?? {},
+    customParameters: settings?.customParameters ?? {},
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -132,7 +140,7 @@ export function ProviderCard({
             <Label>API Key</Label>
             <Input
               type="password"
-              value={settings.api_key}
+              value={safeSettings.api_key}
               onChange={(e) => onSettingChange("api_key", e.target.value)}
               placeholder={`Enter your ${providerConfig.name} API key`}
             />
@@ -141,7 +149,7 @@ export function ProviderCard({
           <div className="space-y-2">
             <Label>Model</Label>
             <Select
-              value={settings.model}
+              value={safeSettings.model}
               onValueChange={(value) => onSettingChange("model", value)}
             >
               <SelectTrigger>
@@ -164,10 +172,10 @@ export function ProviderCard({
                 key={key}
                 paramKey={key}
                 config={param}
-                value={settings.parameters[key]}
+                value={safeSettings.parameters[key] ?? param.default}
                 onChange={(value) =>
                   onSettingChange("parameters", {
-                    ...settings.parameters,
+                    ...safeSettings.parameters,
                     [key]: value,
                   })
                 }

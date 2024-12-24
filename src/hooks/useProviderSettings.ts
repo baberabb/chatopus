@@ -31,11 +31,24 @@ export function useProviderSettings() {
     value: any
   ) => {
     try {
-      const currentSettings = settings[provider];
+      // Get current settings with fallback to empty object
+      const currentSettings = settings[provider] || {
+        api_key: "",
+        model: "",
+        parameters: {},
+        customParameters: {},
+      };
+
+      // Create new settings object
       const newSettings = {
         ...currentSettings,
         [key]: value,
       };
+
+      // Validate the settings before updating
+      if (!newSettings.model) {
+        throw new Error("Model is required");
+      }
       
       await invoke("update_provider_settings", { provider, settings: newSettings });
       setSettings((prev) => ({
@@ -44,8 +57,9 @@ export function useProviderSettings() {
       }));
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update settings');
-      throw err;
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update settings';
+      setError(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 
