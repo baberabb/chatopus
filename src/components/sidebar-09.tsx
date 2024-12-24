@@ -252,14 +252,15 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
                         e.stopPropagation();
                         handleDelete(e, chat.id);
                       }}
-                      className="absolute right-2 top-4 p-2 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-colors"
+                      className="absolute left-2 top-4 p-2 hover:text-red-500 transition-colors"
                       title="Delete conversation"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
 
                     <button
-                      className="w-full flex flex-col items-start gap-2 text-left"
+                      // TODO: remove padding later
+                      className="w-full flex flex-col items-start gap-2 text-left pl-8"
                       onClick={() => handleChatSelect(chat.id)}
                     >
                       <div className="flex w-full items-center gap-2">
