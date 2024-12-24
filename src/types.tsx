@@ -11,6 +11,15 @@ export interface Theme {
 export type ThemeType = "light" | "dark";
 
 // Message types
+export interface FileAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  url: string;
+  previewUrl?: string;
+}
+
 export interface Message {
   id: number;
   content: string;
@@ -23,6 +32,7 @@ export interface Message {
   isEditing?: boolean;
   status?: "streaming" | "complete" | "error";
   error?: string;
+  attachments?: FileAttachment[];
 }
 
 // Conversation types
@@ -84,7 +94,10 @@ export interface ChatState {
   isLoading: boolean;
 
   // Message actions
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (
+    content: string,
+    attachments?: FileAttachment[]
+  ) => Promise<void>;
   appendStreamChunk: (chunk: string) => void;
   setMessages: (messages: Message[]) => void;
   updateLastMessage: (content: string) => void;

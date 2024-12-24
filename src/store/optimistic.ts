@@ -1,4 +1,4 @@
-import { Message } from "./types";
+import { Message, FileAttachment } from "../types";
 import { logger } from "../utils/logger";
 
 let tempIdCounter = -1;
@@ -13,13 +13,15 @@ const createTempId = () => {
 export const createOptimisticMessage = (
   content: string,
   role: string,
-  status: Message['status'] = 'complete'
+  status: Message['status'] = 'complete',
+  attachments?: FileAttachment[]
 ): Message => ({
   id: createTempId(),
   content,
   role,
   timestamp: new Date().toISOString(),
   status,
+  attachments,
 });
 
 // Create optimistic assistant message

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useZustandTheme } from "../../store";
 import { useStreaming } from "../../hooks/useStreaming";
-import { Message } from "../../types";
+import { Message, FileAttachment } from "../../types";
 import { useModel } from "../../contexts/ModelContext";
 import ErrorBoundary from "../ErrorBoundary";
 import { InputArea } from "./InputArea";
@@ -13,7 +13,7 @@ import { logger } from "../../utils/logger";
 import { scrollToBottom } from "./utils";
 
 interface StreamingInputProps {
-  onSend: (content: string) => Promise<void>;
+  onSend: (content: string, attachments?: FileAttachment[]) => Promise<void>;
   onCancel: () => Promise<void>;
 }
 

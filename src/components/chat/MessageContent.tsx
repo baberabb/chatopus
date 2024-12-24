@@ -1,12 +1,12 @@
 import React, { useMemo, useEffect, useState } from "react";
-import { ThumbsUp } from "lucide-react";
+import { ThumbsUp, Download } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useStreamEvents } from "../../hooks/useStreamEvents";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
 import { useZustandTheme } from "../../store";
-import { Message } from "./types";
+import { Message, FileAttachment } from "../../types";
 import { CodeBlock } from "./CodeBlock";
 import { formatMessageRole } from "./utils";
 import { logger } from "../../utils/logger";
@@ -17,6 +17,49 @@ interface MessageContentProps {
 }
 
 const markdownPlugins = [remarkGfm, remarkBreaks, remarkMath];
+
+const AttachmentPreview: React.FC<{ attachment: FileAttachment }> = ({
+  attachment,
+}) => {
+  const { theme } = useZustandTheme();
+  const isImage = attachment.type.startsWith("image/");
+
+  return (
+    <div
+      className="relative group flex items-start gap-2 p-2 rounded-lg max-w-xs"
+      style={{ backgroundColor: `${theme.surface}80` }}
+    >
+      {isImage && attachment.previewUrl ? (
+        <a
+          href={attachment.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block"
+        >
+          <img
+            src={attachment.previewUrl}
+            alt={attachment.name}
+            className="max-w-full rounded-lg max-h-48 object-contain"
+          />
+        </a>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="text-sm truncate max-w-[180px]">
+            {attachment.name}
+          </span>
+          <a
+            href={attachment.url}
+            download={attachment.name}
+            className="p-1 rounded hover:bg-opacity-10 hover:bg-white"
+            title="Download file"
+          >
+            <Download size={16} />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const MessageContent: React.FC<MessageContentProps> = ({
   message,
@@ -69,6 +112,13 @@ export const MessageContent: React.FC<MessageContentProps> = ({
           {message.timestamp}
         </time>
       </div>
+      {message.attachments && message.attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {message.attachments.map((attachment) => (
+            <AttachmentPreview key={attachment.id} attachment={attachment} />
+          ))}
+        </div>
+      )}
       <div
         className="prose prose-slate dark:prose-invert prose-code:before:content-none prose-code:after:content-none max-w-none font-sans leading-relaxed tracking-normal break-words text-[hsl(var(--chat-content))]"
         aria-live={isStreaming ? "polite" : "off"}
