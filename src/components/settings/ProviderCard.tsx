@@ -25,18 +25,33 @@ interface ProviderCardProps {
   settings: ProviderSettings;
   isActive: boolean;
   onSelect: () => void;
-  onSettingChange: (key: keyof ProviderSettings, value: any) => void;
+  onSettingChange: <K extends keyof ProviderSettings>(
+    key: K,
+    value: ProviderSettings[K]
+  ) => void;
   onSave: () => void;
 }
 
-const ParameterField: React.FC<{
+interface BaseParameterFieldProps {
   paramKey: string;
-  config: ParameterConfig;
-  value: any;
-  onChange: (value: any) => void;
   isCustom?: boolean;
   onRemove?: () => void;
-}> = ({ paramKey, config, value, onChange, isCustom, onRemove }) => {
+}
+
+interface ParameterFieldProps extends BaseParameterFieldProps {
+  config: ParameterConfig;
+  value: string | number | boolean;
+  onChange: (value: string | number | boolean) => void;
+}
+
+const ParameterField: React.FC<ParameterFieldProps> = ({
+  paramKey,
+  config,
+  value,
+  onChange,
+  isCustom,
+  onRemove,
+}) => {
   const renderInput = () => {
     switch (config.type) {
       case "number":
@@ -46,20 +61,20 @@ const ParameterField: React.FC<{
             min={config.validation?.min}
             max={config.validation?.max}
             step={config.validation?.step}
-            value={value}
+            value={value.toString()}
             onChange={(e) => onChange(parseFloat(e.target.value))}
           />
         );
       case "boolean":
-        return <Switch checked={value} onCheckedChange={onChange} />;
+        return <Switch checked={Boolean(value)} onCheckedChange={onChange} />;
       case "select":
         return (
-          <Select value={value} onValueChange={onChange}>
+          <Select value={value.toString()} onValueChange={onChange}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {config.validation?.options?.map((option) => (
+              {config.validation?.options?.map((option: string) => (
                 <SelectItem key={option} value={option}>
                   {option}
                 </SelectItem>
@@ -69,7 +84,10 @@ const ParameterField: React.FC<{
         );
       default:
         return (
-          <Input value={value} onChange={(e) => onChange(e.target.value)} />
+          <Input
+            value={value.toString()}
+            onChange={(e) => onChange(e.target.value)}
+          />
         );
     }
   };
@@ -130,7 +148,7 @@ export function ProviderCard({
                 <SelectValue placeholder="Select model" />
               </SelectTrigger>
               <SelectContent>
-                {providerConfig.models.map((model) => (
+                {providerConfig.models.map((model: string) => (
                   <SelectItem key={model} value={model}>
                     {model}
                   </SelectItem>

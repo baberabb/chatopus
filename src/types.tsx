@@ -36,11 +36,30 @@ export interface Conversation {
 }
 
 // Provider types
+export interface ParameterConfig {
+  type: "string" | "number" | "boolean" | "select";
+  label: string;
+  description?: string;
+  default?: string | number | boolean;
+  validation?: {
+    min?: number;
+    max?: number;
+    step?: number;
+    options?: string[];
+  };
+}
+
+export interface ProviderConfig {
+  name: string;
+  models: string[];
+  parameters: Record<string, ParameterConfig>;
+}
+
 export interface ProviderSettings {
   api_key: string;
   model: string;
-  parameters: Record<string, any>;
-  customParameters: Record<string, any>;
+  parameters: Record<string, string | number | boolean>;
+  customParameters: Record<string, string | number | boolean>;
   api_version?: string;
   base_url?: string;
   timeout_seconds?: number;

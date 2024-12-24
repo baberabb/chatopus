@@ -110,7 +110,6 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
     createConversation,
     error,
     isLoading,
-    isStreaming,
     cancelMessage,
   } = useChatStore();
 
@@ -119,13 +118,8 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
     loadConversations();
   }, [loadConversations]);
 
-  const handleChatSelect = async (chatId: string) => {
+  const handleChatSelect = async (chatId: number) => {
     try {
-      // Cancel any ongoing streaming before switching
-      if (isStreaming) {
-        await cancelMessage();
-      }
-
       await loadConversation(chatId);
       setCurrentConversationId(chatId);
       setOpen(true);
@@ -134,14 +128,9 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, chatId: string) => {
+  const handleDelete = async (e: React.MouseEvent, chatId: number) => {
     e.stopPropagation(); // Prevent chat selection when clicking delete
     try {
-      // Cancel any ongoing streaming if deleting current conversation
-      if (chatId === currentConversationId && isStreaming) {
-        await cancelMessage();
-      }
-
       await deleteConversation(chatId);
     } catch (err) {
       console.error("Error deleting conversation:", err);
@@ -150,12 +139,7 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
 
   const handleNewChat = async () => {
     try {
-      // Cancel any ongoing streaming before creating new chat
-      if (isStreaming) {
-        await cancelMessage();
-      }
-
-      const newId = await createConversation();
+      const newId: number = await createConversation();
       await setCurrentConversationId(newId);
       await loadConversations();
     } catch (err) {
