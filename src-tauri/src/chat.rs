@@ -310,7 +310,7 @@ pub async fn edit_message(
     let current = sqlx::query!(
         r#"
         SELECT 
-            id,
+            id AS "id: i64",
             conversation_id,
             role,
             content,
