@@ -2,7 +2,7 @@ import * as React from "react";
 import { createRoot } from "react-dom/client";
 import { TooltipProvider } from "./components/ui/tooltip";
 import "./globals.css";
-import { useZustandTheme, useModelStore } from "./store";
+import { useThemeStore } from "./store";
 import { ModelProvider } from "./contexts/ModelContext";
 
 const SidebarLayout = React.lazy(() => import("./components/sidebar-09"));
@@ -14,8 +14,7 @@ const LoadingFallback = () => (
 );
 
 const App = () => {
-  const { theme, initialized: themeInitialized } = useZustandTheme();
-  const { initialized: modelInitialized } = useModelStore();
+  const { theme, initialized: themeInitialized } = useThemeStore();
 
   React.useEffect(() => {
     if (themeInitialized) {
@@ -24,7 +23,7 @@ const App = () => {
     }
   }, [theme, themeInitialized]);
 
-  if (!themeInitialized || !modelInitialized) {
+  if (!themeInitialized) {
     return <LoadingFallback />;
   }
 
@@ -53,7 +52,7 @@ const AppLayout: FC = () => {
   const [currentView, setCurrentView] = useState<"chat" | "settings" | "model">(
     "chat"
   );
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
 
   useEffect(() => {
     document.body.style.backgroundColor = theme.background;

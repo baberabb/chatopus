@@ -41,7 +41,8 @@ import Settings from "./settings/Settings";
 import { ModelSettings } from "./settings/ModelSettings";
 import { ThemeToggle } from "./ThemeToggle";
 import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
-import { useZustandTheme, useChatStore } from "../store";
+import { useThemeStore } from "../store";
+import { useConversationStore } from "../store/conversation";
 
 const data = {
   user: {
@@ -55,7 +56,7 @@ export default function Page() {
   const [activeContent, setActiveContent] = React.useState<
     "inbox" | "trash" | "settings" | "model"
   >("inbox");
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
 
   return (
     <SidebarProvider
@@ -99,19 +100,17 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 
 function AppSidebar({ setActiveContent }: AppSidebarProps) {
   const { setOpen } = useSidebar();
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
   const {
     conversations,
-    currentConversationId,
-    setCurrentConversationId,
-    loadConversations,
-    loadConversation,
-    deleteConversation,
-    createConversation,
+    currentId,
+    loading: isLoading,
     error,
-    isLoading,
-    cancelMessage,
-  } = useChatStore();
+    loadConversations,
+    setCurrentConversation,
+    createConversation,
+    deleteConversation,
+  } = useConversationStore();
 
   // Load conversations
   React.useEffect(() => {
@@ -120,8 +119,7 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
 
   const handleChatSelect = async (chatId: number) => {
     try {
-      await loadConversation(chatId);
-      setCurrentConversationId(chatId);
+      await setCurrentConversation(chatId);
       setOpen(true);
     } catch (err) {
       console.error("Error loading conversation:", err);
@@ -133,11 +131,10 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
     try {
       await deleteConversation(chatId);
       // If we're deleting the current conversation, create a new one
-      if (currentConversationId === chatId) {
+      if (currentId === chatId) {
         const newId = await createConversation();
-        await setCurrentConversationId(newId);
+        await setCurrentConversation(newId);
       }
-      await loadConversations(); // Reload the list after deletion
     } catch (err) {
       console.error("Error deleting conversation:", err);
     }
@@ -146,8 +143,7 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
   const handleNewChat = async () => {
     try {
       const newId: number = await createConversation();
-      await setCurrentConversationId(newId);
-      await loadConversations();
+      await setCurrentConversation(newId);
     } catch (err) {
       console.error("Error creating new chat:", err);
     }
@@ -233,16 +229,16 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
               </div>
             ) : error ? (
               <div className="p-4 text-red-500 text-sm">{error}</div>
-            ) : conversations.length === 0 ? (
+            ) : conversations.size === 0 ? (
               <div className="p-4 text-sm text-gray-500">
                 No conversations yet
               </div>
             ) : (
-              conversations.map((chat) => (
+              Array.from(conversations.values()).map((chat) => (
                 <div
                   key={chat.id}
                   className={`group relative w-full text-left border-b last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-                    currentConversationId === chat.id ? "bg-sidebar-accent" : ""
+                    currentId === chat.id ? "bg-sidebar-accent" : ""
                   }`}
                   style={{ borderColor: theme.border }}
                 >
@@ -307,7 +303,7 @@ function NavUser({
   };
 }) {
   const { isMobile } = useSidebar();
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
 
   return (
     <SidebarMenu>

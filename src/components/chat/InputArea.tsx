@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Paperclip, Zap, CornerRightUp, XCircle, X } from "lucide-react";
-import { useZustandTheme } from "../../store";
+import { useThemeStore } from "../../store";
 import { useStreamEvents } from "../../hooks/useStreamEvents";
 import { FileAttachment } from "../../types";
 
@@ -47,7 +47,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({
 
 export const InputArea: React.FC<InputAreaProps> = React.memo(
   ({ onSend, isStreaming: initialStreaming, isCancellable, onCancel }) => {
-    const { theme } = useZustandTheme();
+    const { theme } = useThemeStore();
     const [isStreaming, setIsStreaming] = useState(initialStreaming);
     const [attachments, setAttachments] = useState<FileAttachment[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);

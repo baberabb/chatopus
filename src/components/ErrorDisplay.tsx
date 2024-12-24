@@ -1,6 +1,6 @@
 import React from "react";
 import { AlertCircle, RotateCcw } from "lucide-react";
-import { useZustandTheme } from "@/store";
+import { useThemeStore } from "../store";
 
 interface ErrorDisplayProps {
   message: string;
@@ -13,7 +13,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
   details,
   onRetry,
 }) => {
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
 
   return (
     <div className="flex hover:bg-opacity-50 transition-colors duration-200 py-3 px-4 hover:bg-transparent">

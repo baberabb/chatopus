@@ -1,6 +1,6 @@
 import React from "react";
 import { ThumbsUp, Copy, Pencil } from "lucide-react";
-import { useZustandTheme } from "../../store";
+import { useThemeStore } from "../../store";
 
 interface MessageActionsProps {
   onEdit?: () => void;
@@ -17,7 +17,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   isVisible,
   showEditButton = true,
 }) => {
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
 
   const baseButtonClass = "transition-colors duration-200";
   const visibilityClass = isVisible ? "opacity-100" : "opacity-0";

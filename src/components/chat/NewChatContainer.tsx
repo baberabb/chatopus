@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
-import { useZustandTheme } from "../../store";
+import { useThemeStore } from "../../store";
 import { useStreaming } from "../../hooks/useStreaming";
 import { Message, FileAttachment, ContentBlock } from "../../types";
 import { useModel } from "../../contexts/ModelContext";
@@ -61,7 +61,7 @@ const StreamingMessage: React.FC<StreamingMessageProps> = ({
 };
 
 export function NewChatContainer() {
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
   const { currentModel } = useModel();
   const messageListRef = useRef<HTMLDivElement>(null);
   const streamingState = useStreaming();

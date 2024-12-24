@@ -1,11 +1,10 @@
 import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
 import { Slider } from "../ui/slider";
-import { useZustandTheme } from "../../store";
-// import { Separator } from "./ui/separator";
+import { useThemeStore } from "../../store";
 
 const Settings = () => {
-  const { theme, toggleTheme } = useZustandTheme();
+  const { theme, toggleTheme } = useThemeStore();
 
   return (
     <div className="p-6 max-w-2xl mx-auto">

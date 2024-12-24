@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { useZustandTheme } from "../../store";
+import { useThemeStore } from "../../store";
 
 interface SystemMessageEditorProps {
   systemMessage?: string;
@@ -15,7 +15,7 @@ export function SystemMessageEditor({
   onUpdate,
   disabled,
 }: SystemMessageEditorProps) {
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(systemMessage || "");
 

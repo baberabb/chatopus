@@ -3,7 +3,7 @@ import { Play, Copy } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/default-highlight";
 import { vs2015 } from "react-syntax-highlighter/dist/esm/styles/hljs";
-import { useZustandTheme } from "../../store";
+import { useThemeStore } from "../../store";
 
 interface CodeBlockProps {
   language: string;
@@ -151,7 +151,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   value: initialValue,
   isStreaming = false,
 }) => {
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
   const { code, setCode, isEditing, setIsEditing, textareaRef, handleKeyDown } =
     useCodeEditor(initialValue, isStreaming);
   const { isRunning, output, runCode } = useCodeExecution(code, language);

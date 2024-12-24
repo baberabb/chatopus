@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { Copy, Check } from "lucide-react";
-import { useZustandTheme } from "../../store";
+import { useThemeStore } from "../../store";
 
 interface CopyButtonProps {
   text: string;
@@ -13,7 +13,7 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
   position = "absolute",
   className = "",
 }) => {
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
   const [isCopied, setIsCopied] = useState(false);
 
   const copy = useCallback(async () => {

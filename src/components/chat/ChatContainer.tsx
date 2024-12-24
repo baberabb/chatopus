@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
-import { useZustandTheme } from "../../store";
+import { useThemeStore } from "../../store";
 import { useStreaming } from "../../hooks/useStreaming";
 import { Message, FileAttachment, Conversation } from "../../types";
 import { useModel } from "../../contexts/ModelContext";
@@ -63,7 +63,7 @@ const StreamingMessage: React.FC<StreamingMessageProps> = ({
 };
 
 export function ChatContainer() {
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
   const { currentModel } = useModel();
   const messageListRef = useRef<HTMLDivElement>(null);
   const streaming = useStreaming();
@@ -88,8 +88,8 @@ export function ChatContainer() {
 
   const {
     messages,
-    currentConversationId,
-    conversations,
+    currentId,
+    currentConversation,
     isLoading,
     error,
     sendMessage,
@@ -97,10 +97,6 @@ export function ChatContainer() {
     cancelMessage,
     updateConversation,
   } = useChat();
-
-  const currentConversation = conversations.find(
-    (c) => c.id === currentConversationId
-  );
 
   // Get the latest message content for scroll tracking
   const latestMessageContent = messages[messages.length - 1]?.content || "";
@@ -160,12 +156,12 @@ export function ChatContainer() {
         </div>
 
         {/* System message editor */}
-        {currentConversationId && (
+        {currentId && (
           <SystemMessageEditor
             systemMessage={currentConversation?.systemMessage}
             onUpdate={(message) => {
-              if (currentConversationId) {
-                updateConversation(currentConversationId, {
+              if (currentId) {
+                updateConversation(currentId, {
                   systemMessage: message,
                 });
               }
@@ -195,7 +191,7 @@ export function ChatContainer() {
                   message={msg}
                   onReact={handleReact}
                   onEdit={handleEdit}
-                  conversationId={currentConversationId}
+                  conversationId={currentId}
                 />
               </React.Fragment>
             ))

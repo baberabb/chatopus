@@ -5,7 +5,7 @@ import { useStreamEvents } from "../../hooks/useStreamEvents";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
-import { useZustandTheme } from "../../store";
+import { useThemeStore } from "../../store";
 import { Message, FileAttachment } from "../../types";
 import { CodeBlock } from "./CodeBlock";
 import { formatMessageRole } from "./utils";
@@ -21,7 +21,7 @@ const markdownPlugins = [remarkGfm, remarkBreaks, remarkMath];
 const AttachmentPreview: React.FC<{ attachment: FileAttachment }> = ({
   attachment,
 }) => {
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
   const isImage = attachment.type.startsWith("image/");
 
   return (
@@ -70,7 +70,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({
   useStreamEvents(() => {
     setIsStreaming(false);
   });
-  const { theme } = useZustandTheme();
+  const { theme } = useThemeStore();
   const isAssistant = message.role === "assistant";
 
   const markdownComponents = {

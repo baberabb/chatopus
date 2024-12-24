@@ -310,13 +310,13 @@ pub async fn edit_message(
     let current = sqlx::query!(
         r#"
         SELECT 
-            id,
-            conversation_id,
+            id as "id: i64",
+            conversation_id as "conversation_id: i64",
             role,
             content,
             created_at,
             metadata,
-            original_message_id
+            original_message_id as "original_message_id: i64"
         FROM messages 
         WHERE id = ?
         "#,

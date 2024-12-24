@@ -1,135 +1,73 @@
-import { useCallback, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { useChatStore } from "../../store";
-import { Message } from "../../types";
-import { findMessageById } from "./utils";
+import { useConversationStore } from "../../store/conversation";
+import { useMessageStore } from "../../store/message";
+import { FileAttachment } from "../../types";
 
 export function useChat() {
   const {
-    // State
-    messages,
     conversations,
-    currentConversationId,
-    isLoading,
-    error,
-    
-    // Message actions
-    sendMessage,
-    
-    // Conversation actions
+    currentId,
+    loading: conversationLoading,
+    error: conversationError,
     loadConversations,
-    loadConversation,
-    setCurrentConversationId,
+    setCurrentConversation,
     createConversation,
-    updateConversation,
     deleteConversation,
-    
-    // Other actions
-    setMessages,
-    clearMessages,
-  } = useChatStore();
+    updateConversation
+  } = useConversationStore();
 
-  // Get streaming state from last message
-  const isStreaming = messages[messages.length - 1]?.status === 'streaming';
+  const {
+    messagesByConversation,
+    loading: messageLoading,
+    error: messageError,
+    streaming,
+    loadMessages,
+    sendMessage,
+    editMessage,
+    cancelMessage,
+  } = useMessageStore();
 
-  // Local UI state
-  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const currentConversation = currentId 
+    ? conversations.get(currentId)
+    : null;
 
-  // Message editing
-  const handleEdit = useCallback(async (messageId: number, newContent: string) => {
-    try {
-      const messageIndex = findMessageById(messages, messageId);
-      if (messageIndex === -1) return;
+  const messages = currentId 
+    ? messagesByConversation.get(currentId) || []
+    : [];
 
-      // Update message optimistically
-      const updatedMessages = [...messages];
-      updatedMessages[messageIndex] = {
-        ...updatedMessages[messageIndex],
-        content: newContent,
-        isEditing: false,
-      };
-      setMessages(updatedMessages);
+  const isLoading = conversationLoading || messageLoading;
+  const error = messageError || conversationError;
 
-      // Save to backend
-      await invoke("edit_message", { messageId: messageId.toString(), newContent });
-      setEditingMessageId(null);
+  const handleSendMessage = async (content: string, attachments?: FileAttachment[]) => {
+    if (!currentId) return;
+    await sendMessage(currentId, content, attachments);
+  };
 
-      // Reload conversation to get updated messages
-      if (currentConversationId) {
-        await loadConversation(currentConversationId);
-      }
-    } catch (error) {
-      console.error("Failed to edit message:", error);
-      
-      // Revert on error
-      const messageIndex = findMessageById(messages, messageId);
-      if (messageIndex !== -1) {
-        const updatedMessages = [...messages];
-        updatedMessages[messageIndex] = {
-          ...updatedMessages[messageIndex],
-          isEditing: false,
-        };
-        setMessages(updatedMessages);
-      }
-      setEditingMessageId(null);
-    }
-  }, [messages, setMessages, currentConversationId, loadConversation]);
-
-  // Start editing
-  const startEdit = useCallback((messageId: number) => {
-    const messageIndex = findMessageById(messages, messageId);
-    if (messageIndex !== -1) {
-      const updatedMessages = [...messages];
-      updatedMessages[messageIndex] = {
-        ...updatedMessages[messageIndex],
-        isEditing: true,
-      };
-      setMessages(updatedMessages);
-      setEditingMessageId(messageId);
-    }
-  }, [messages, setMessages]);
-
-  // Cancel message
-  const cancelMessage = useCallback(async () => {
-    try {
-      await invoke("cancel_message");
-    } catch (error) {
-      console.error("Failed to cancel message:", error);
-    }
-  }, []);
-
-  // Clear chat
-  const clearChat = useCallback(async () => {
-    try {
-      const newId = await createConversation();
-      await setCurrentConversationId(newId);
-      await loadConversations();
-    } catch (error) {
-      console.error("Failed to clear chat:", error);
-    }
-  }, [createConversation, setCurrentConversationId, loadConversations]);
+  const handleEditMessage = async (messageId: number, content: string) => {
+    if (!currentId) return;
+    await editMessage(currentId, messageId, content);
+  };
 
   return {
     // State
-    messages,
+    currentConversation,
     conversations,
-    currentConversationId,
+    currentId,
+    messages,
     isLoading,
     error,
-    editingMessageId,
-    
-    // Message actions
-    sendMessage,
-    handleEdit,
-    startEdit,
-    cancelMessage,
+    streaming,
     
     // Conversation actions
     loadConversations,
-    loadConversation,
-    setCurrentConversationId,
-    updateConversation,
+    setCurrentConversation,
+    createConversation,
     deleteConversation,
-    clearChat,
+    updateConversation,
+    
+    // Message actions
+    loadMessages,
+    sendMessage: handleSendMessage,
+    handleEdit: handleEditMessage,
+    cancelMessage,
   };
 }
