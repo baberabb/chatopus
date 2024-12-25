@@ -64,15 +64,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       });
 
-      // Update state with real IDs
-      set(state => ({
-        currentConversationId: response.conversation_id,
-        messages: updateMessageId(
-          updateMessageId(state.messages, userMessage.id, response.user_message_id),
-          assistantMessage.id,
-          response.assistant_message_id
-        )
-      }));
+      // Update state with real IDs - optimize by doing single pass
+      set(state => {
+        const messages = [...state.messages];
+        // Find and update both messages in one pass
+        for (let i = messages.length - 2; i < messages.length; i++) {
+          const msg = messages[i];
+          if (msg.id === userMessage.id) {
+            messages[i] = { ...msg, id: response.user_message_id };
+          } else if (msg.id === assistantMessage.id) {
+            messages[i] = { ...msg, id: response.assistant_message_id };
+          }
+        }
+        return {
+          currentConversationId: response.conversation_id,
+          messages
+        };
+      });
 
       // Load conversation list in background
       get().loadConversations();
@@ -89,7 +97,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   appendStreamChunk: (chunk: string) => {
-    const lastMessage = get().messages[get().messages.length - 1];
+    const messages = get().messages;
+    const lastIndex = messages.length - 1;
+    const lastMessage = messages[lastIndex];
+    
     if (lastMessage?.status === 'streaming') {
       logger.state('Store', {
         action: 'appendStreamChunk',
@@ -100,15 +111,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       });
 
-      set(state => ({
-        messages: updateMessageContent(state.messages, lastMessage.id, lastMessage.content + chunk)
-      }));
+      // Only create new object for the last message
+      const updatedMessage = {
+        ...lastMessage,
+        content: lastMessage.content + chunk
+      };
+
+      // Create new array with same references except last message
+      const updatedMessages = [...messages];
+      updatedMessages[lastIndex] = updatedMessage;
+
+      set({ messages: updatedMessages });
 
       logger.state('Store', {
         action: 'appendStreamChunk',
         messageId: lastMessage.id,
         after: {
-          contentLength: get().messages.find(m => m.id === lastMessage.id)?.content.length
+          contentLength: updatedMessage.content.length
         }
       });
     }
@@ -117,11 +136,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setMessages: (messages: Message[]) => set({ messages }),
   
   updateLastMessage: (content: string) => {
-    const lastMessage = get().messages[get().messages.length - 1];
+    const messages = get().messages;
+    const lastIndex = messages.length - 1;
+    const lastMessage = messages[lastIndex];
+    
     if (lastMessage) {
-      set(state => ({
-        messages: updateMessageContent(state.messages, lastMessage.id, content)
-      }));
+      // Only create new object for the last message
+      const updatedMessage = {
+        ...lastMessage,
+        content
+      };
+
+      // Create new array with same references except last message
+      const updatedMessages = [...messages];
+      updatedMessages[lastIndex] = updatedMessage;
+
+      set({ messages: updatedMessages });
     }
   },
 
@@ -133,7 +163,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   cancelMessage: async () => {
     try {
       await invoke('cancel_message');
-      const lastMessage = get().messages[get().messages.length - 1];
+      const messages = get().messages;
+      const lastIndex = messages.length - 1;
+      const lastMessage = messages[lastIndex];
+      
       if (lastMessage?.status === 'streaming') {
         logger.state('Store', {
           action: 'cancelMessage',
@@ -143,16 +176,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         });
 
-        // Update message status
-        set(state => ({
-          messages: updateMessageStatus(state.messages, lastMessage.id, 'error')
-        }));
+        // Only create new object for the last message
+        const updatedMessage = {
+          ...lastMessage,
+          status: 'error' as const
+        };
+
+        // Create new array with same references except last message
+        const updatedMessages = [...messages];
+        updatedMessages[lastIndex] = updatedMessage;
+
+        set({ messages: updatedMessages });
 
         logger.state('Store', {
           action: 'cancelMessage',
           messageId: lastMessage.id,
           after: {
-            messageStatus: get().messages.find(m => m.id === lastMessage.id)?.status
+            messageStatus: updatedMessage.status
           }
         });
       }
@@ -319,21 +359,25 @@ export const useModelStore = create<ModelStore>((set) => ({
   },
   updateProviderSettings: (provider, settings) =>
     set((state) => {
+      // Only create new objects for the changed provider
+      const newProviders = {
+        ...state.config.providers,
+        [provider]: settings
+      };
       const newConfig = {
         ...state.config,
-        providers: {
-          ...state.config.providers,
-          [provider]: settings,
-        },
+        providers: newProviders
       };
       localStorage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
       return { config: newConfig };
     }),
   setActiveProvider: (provider) =>
     set((state) => {
+      // Only update active_provider field
+      if (provider === state.config.active_provider) return state;
       const newConfig = {
         ...state.config,
-        active_provider: provider,
+        active_provider: provider
       };
       localStorage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
       return { config: newConfig };
