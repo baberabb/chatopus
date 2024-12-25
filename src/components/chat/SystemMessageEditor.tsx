@@ -2,7 +2,19 @@ import React, { useState } from "react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { useZustandTheme, useChatStore } from "../../store";
+import {
+  useZustandTheme,
+  useChatStore,
+  useSystemMessage,
+  useChatLoading,
+} from "../../store";
+import type { ChatState } from "../../types";
+
+// Define stable selectors outside component
+const selectInitialized = (state: ChatState) => state.initialized;
+const selectCurrentConversationId = (state: ChatState) =>
+  state.currentConversationId;
+const selectUpdateConversation = (state: ChatState) => state.updateConversation;
 
 interface SystemMessageEditorProps {
   disabled?: boolean;
@@ -10,14 +22,11 @@ interface SystemMessageEditorProps {
 
 export function SystemMessageEditor({ disabled }: SystemMessageEditorProps) {
   const { theme } = useZustandTheme();
-  const store = useChatStore();
-  const {
-    systemMessage,
-    isLoading,
-    initialized,
-    currentConversationId,
-    updateConversation,
-  } = store;
+  const systemMessage = useSystemMessage();
+  const isLoading = useChatLoading();
+  const initialized = useChatStore(selectInitialized);
+  const currentConversationId = useChatStore(selectCurrentConversationId);
+  const updateConversation = useChatStore(selectUpdateConversation);
 
   // Return null if store is not initialized
   if (!initialized) {
