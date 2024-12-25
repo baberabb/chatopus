@@ -63,13 +63,8 @@ const AttachmentPreview: React.FC<{ attachment: FileAttachment }> = ({
 
 export const MessageContent: React.FC<MessageContentProps> = ({
   message,
-  isStreaming: initialStreaming = false,
+  isStreaming = false,
 }) => {
-  const [isStreaming, setIsStreaming] = useState(initialStreaming);
-
-  useStreamEvents(() => {
-    setIsStreaming(false);
-  });
   const { theme } = useZustandTheme();
   const isAssistant = message.role === "assistant";
 

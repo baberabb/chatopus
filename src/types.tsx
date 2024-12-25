@@ -112,6 +112,7 @@ export interface ChatState {
     attachments?: FileAttachment[]
   ) => Promise<void>;
   appendStreamChunk: (chunk: string) => void;
+  completeStream: () => void;
   setMessages: (messages: Message[]) => void;
   updateLastMessage: (content: string) => void;
   clearMessages: () => void;

@@ -35,32 +35,65 @@ const StreamingInput: React.FC<StreamingInputProps> = ({
   );
 };
 
-interface StreamingMessageProps {
-  message: Message;
+// Memoize individual message rendering to prevent unnecessary re-renders
+// Individual message component that only re-renders when its own content changes
+const MessageItem = React.memo(
+  ({
+    message,
+    onReact,
+    onEdit,
+    conversationId,
+  }: {
+    message: Message;
+    onReact: (messageId: number) => void;
+    onEdit: (messageId: number, content: string) => Promise<void>;
+    conversationId: number | null;
+  }) => {
+    // Only check streaming state if this message is marked as streaming
+    const shouldCheckStreaming = message.status === "streaming";
+    const streaming = useStreaming();
+    const isStreaming = shouldCheckStreaming ? streaming.isStreaming() : false;
+
+    return (
+      <MessageBlock
+        key={message.id}
+        message={message}
+        onReact={onReact}
+        onEdit={onEdit}
+        conversationId={conversationId}
+        isStreaming={isStreaming}
+      />
+    );
+  },
+  // Custom comparison to prevent unnecessary re-renders
+  (prevProps, nextProps) => {
+    return (
+      prevProps.message.content === nextProps.message.content &&
+      prevProps.message.status === nextProps.message.status &&
+      prevProps.conversationId === nextProps.conversationId
+    );
+  }
+);
+
+// Message list that only provides structural organization
+const MessageList: React.FC<{
+  messages: Message[];
   onReact: (messageId: number) => void;
   onEdit: (messageId: number, content: string) => Promise<void>;
   conversationId: number | null;
-}
-
-// Separate component that handles streaming state
-const StreamingMessage: React.FC<StreamingMessageProps> = ({
-  message,
-  onReact,
-  onEdit,
-  conversationId,
-}) => {
-  const streaming = useStreaming();
-  const isStreaming = streaming.isStreaming();
-  return (
-    <MessageBlock
-      message={message}
-      onReact={onReact}
-      onEdit={onEdit}
-      conversationId={conversationId}
-      isStreaming={message.status === "streaming" && isStreaming}
-    />
-  );
-};
+}> = React.memo(({ messages, onReact, onEdit, conversationId }) => (
+  <>
+    {messages.map((msg) => (
+      <MessageItem
+        key={msg.id}
+        message={msg}
+        onReact={onReact}
+        onEdit={onEdit}
+        conversationId={conversationId}
+      />
+    ))}
+  </>
+));
 
 export function ChatContainer() {
   const { theme } = useZustandTheme();
@@ -111,6 +144,9 @@ export function ChatContainer() {
 
   // Get message editing functionality
   const { handleEdit } = useChat();
+
+  // Only track message IDs for minimal re-renders
+  const messageIds = React.useMemo(() => messages.map((m) => m.id), [messages]);
 
   // Get the latest message content for scroll tracking
   const latestMessageContent = messages[messages.length - 1]?.content || "";
@@ -189,16 +225,12 @@ export function ChatContainer() {
               Start a new conversation
             </div>
           ) : (
-            messages.map((msg, index) => (
-              <React.Fragment key={msg.id}>
-                <StreamingMessage
-                  message={msg}
-                  onReact={handleReact}
-                  onEdit={handleEdit}
-                  conversationId={currentConversationId}
-                />
-              </React.Fragment>
-            ))
+            <MessageList
+              messages={messages}
+              onReact={handleReact}
+              onEdit={handleEdit}
+              conversationId={currentConversationId}
+            />
           )}
           {error && (
             <ErrorDisplay

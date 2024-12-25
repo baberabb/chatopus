@@ -26,50 +26,14 @@ import {
   ProviderType
 } from "./types";
 
-// Handle stream events
+// Handle stream events in store to centralize streaming state
 listen("stream-response", (event) => {
   const chunk = event.payload as string;
-  const lastMessage = useChatStore.getState().messages[useChatStore.getState().messages.length - 1];
-  if (lastMessage?.status === 'streaming') {
-    useChatStore.getState().appendStreamChunk(chunk);
-  }
+  useChatStore.getState().appendStreamChunk(chunk);
 });
 
-// Handle stream completion
 listen("stream-complete", () => {
-  const messages = useChatStore.getState().messages;
-  const lastIndex = messages.length - 1;
-  const lastMessage = messages[lastIndex];
-  
-  if (lastMessage?.status === 'streaming') {
-    logger.state('Store', {
-      action: 'completeStream',
-      messageId: lastMessage.id,
-      before: {
-        messageStatus: lastMessage.status
-      }
-    });
-
-    // Only create new object for the last message
-    const updatedMessage = {
-      ...lastMessage,
-      status: 'complete' as const
-    };
-
-    // Create new array with same references except last message
-    const updatedMessages = [...messages];
-    updatedMessages[lastIndex] = updatedMessage;
-
-    useChatStore.setState({ messages: updatedMessages });
-
-    logger.state('Store', {
-      action: 'completeStream',
-      messageId: lastMessage.id,
-      after: {
-        messageStatus: updatedMessage.status
-      }
-    });
-  }
+  useChatStore.getState().completeStream();
 });
 
 // Selectors for granular state updates
@@ -118,23 +82,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       });
 
-      // Update state with real IDs - optimize by doing single pass
-      set(state => {
-        const messages = [...state.messages];
-        // Find and update both messages in one pass
-        for (let i = messages.length - 2; i < messages.length; i++) {
-          const msg = messages[i];
+      // Update state with real IDs - optimize using map for reference equality
+      set(state => ({
+        currentConversationId: response.conversation_id,
+        messages: state.messages.map(msg => {
           if (msg.id === userMessage.id) {
-            messages[i] = { ...msg, id: response.user_message_id };
-          } else if (msg.id === assistantMessage.id) {
-            messages[i] = { ...msg, id: response.assistant_message_id };
+            return { ...msg, id: response.user_message_id };
           }
-        }
-        return {
-          currentConversationId: response.conversation_id,
-          messages
-        };
-      });
+          if (msg.id === assistantMessage.id) {
+            return { ...msg, id: response.assistant_message_id };
+          }
+          return msg; // Keep same reference for unchanged messages
+        })
+      }));
 
       // Load conversation list in background
       // get().loadConversations();
@@ -151,40 +111,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   appendStreamChunk: (chunk: string) => {
-    const messages = get().messages;
-    const lastIndex = messages.length - 1;
-    const lastMessage = messages[lastIndex];
-    
-    if (lastMessage?.status === 'streaming') {
-      logger.state('Store', {
-        action: 'appendStreamChunk',
-        messageId: lastMessage.id,
-        before: {
-          contentLength: lastMessage.content.length,
-          chunkLength: chunk.length
-        }
-      });
-
-      // Only create new object for the last message
-      const updatedMessage = {
-        ...lastMessage,
-        content: lastMessage.content + chunk
+    set((state) => {
+      const lastIndex = state.messages.length - 1;
+      const lastMessage = state.messages[lastIndex];
+      
+      if (lastMessage?.status !== 'streaming') return state;
+      
+      return {
+        messages: state.messages.map((msg, index) => 
+          index === lastIndex
+            ? { ...msg, content: msg.content + chunk }
+            : msg
+        )
       };
+    });
+  },
 
-      // Create new array with same references except last message
-      const updatedMessages = [...messages];
-      updatedMessages[lastIndex] = updatedMessage;
-
-      set({ messages: updatedMessages });
-
-      logger.state('Store', {
-        action: 'appendStreamChunk',
-        messageId: lastMessage.id,
-        after: {
-          contentLength: updatedMessage.content.length
-        }
-      });
-    }
+  completeStream: () => {
+    set((state) => {
+      const lastIndex = state.messages.length - 1;
+      const lastMessage = state.messages[lastIndex];
+      
+      if (lastMessage?.status !== 'streaming') return state;
+      
+      return {
+        messages: state.messages.map((msg, index) => 
+          index === lastIndex
+            ? { ...msg, status: 'complete' as const }
+            : msg
+        )
+      };
+    });
   },
 
   setMessages: (messages: Message[]) => set({ messages }),
@@ -195,17 +152,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const lastMessage = messages[lastIndex];
     
     if (lastMessage) {
-      // Only create new object for the last message
-      const updatedMessage = {
-        ...lastMessage,
-        content
-      };
-
-      // Create new array with same references except last message
-      const updatedMessages = [...messages];
-      updatedMessages[lastIndex] = updatedMessage;
-
-      set({ messages: updatedMessages });
+      // Use setState with updater to handle concurrent updates
+      set((state) => {
+        if (state.messages[lastIndex]?.id !== lastMessage.id) return state;
+        
+        // Return a new state only if we need to update
+        return {
+          messages: state.messages.map((msg, index) => 
+            index === lastIndex
+              ? { ...msg, content }
+              : msg
+          )
+        };
+      });
     }
   },
 
@@ -231,23 +190,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
         });
 
-        // Only create new object for the last message
-        const updatedMessage = {
-          ...lastMessage,
-          status: 'error' as const
-        };
-
-        // Create new array with same references except last message
-        const updatedMessages = [...messages];
-        updatedMessages[lastIndex] = updatedMessage;
-
-        set({ messages: updatedMessages });
+        // Use setState with updater to handle concurrent updates
+        set((state) => {
+          if (state.messages[lastIndex]?.id !== lastMessage.id) return state;
+          
+          // Return a new state only if we need to update
+          return {
+            messages: state.messages.map((msg, index) => 
+              index === lastIndex
+                ? { ...msg, status: 'error' as const }
+                : msg
+            )
+          };
+        });
 
         logger.state('Store', {
           action: 'cancelMessage',
           messageId: lastMessage.id,
           after: {
-            messageStatus: updatedMessage.status
+            messageStatus: 'error'
           }
         });
       }
@@ -391,17 +352,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await invoke('update_conversation', { id, updates });
       
-      // Handle system message updates separately
+      // Handle system message updates separately to prevent unnecessary re-renders
       if ('systemMessage' in updates) {
-        set({ systemMessage: updates.systemMessage || null });
+        set(state => {
+          const newSystemMessage = updates.systemMessage || null;
+          // Only update if value actually changed
+          if (state.systemMessage === newSystemMessage) return state;
+          return { ...state, systemMessage: newSystemMessage };
+        });
       }
       
-      // Only reload conversations if metadata changed (title, preview, etc)
-      const metadataChanged = Object.keys(updates).some(key => 
-        key !== 'systemMessage' && key !== 'messages'
+      // Only reload conversations if non-message metadata changed
+      const hasMetadataChanges = Object.keys(updates).some(key => 
+        key !== 'systemMessage' && 
+        key !== 'messages' && 
+        key !== 'timestamp'
       );
       
-      if (metadataChanged) {
+      if (hasMetadataChanges) {
         await get().loadConversations();
       }
     } catch (error) {
@@ -554,15 +522,22 @@ initializeStore().then(({ theme, modelConfig }) => {
   });
 });
 
-// Hooks for accessing specific parts of state
-export const useMessages = () => useChatStore((state: ChatState) => state.messages);
-export const useConversations = () => useChatStore((state: ChatState) => ({
+// Stable selectors to prevent unnecessary re-renders
+const selectMessages = (state: ChatState) => state.messages;
+const selectConversations = (state: ChatState) => ({
   conversations: state.conversations,
   currentConversationId: state.currentConversationId
-}));
-export const useSystemMessage = () => useChatStore((state: ChatState) => state.systemMessage);
-export const useChatError = () => useChatStore((state: ChatState) => state.error);
-export const useChatLoading = () => useChatStore((state: ChatState) => state.isLoading);
+});
+const selectSystemMessage = (state: ChatState) => state.systemMessage;
+const selectError = (state: ChatState) => state.error;
+const selectLoading = (state: ChatState) => state.isLoading;
+
+// Hooks for accessing specific parts of state with stable selectors
+export const useMessages = () => useChatStore(selectMessages);
+export const useConversations = () => useChatStore(selectConversations);
+export const useSystemMessage = () => useChatStore(selectSystemMessage);
+export const useChatError = () => useChatStore(selectError);
+export const useChatLoading = () => useChatStore(selectLoading);
 
 export const useZustandTheme = () => {
   const store = useThemeStore();

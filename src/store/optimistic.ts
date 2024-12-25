@@ -63,21 +63,31 @@ export const updateMessageStatus = (
   messages: Message[],
   messageId: number,
   status: Message['status']
-): Message[] =>
-  messages.map(msg =>
-    msg.id === messageId 
-      ? { ...msg, status }
-      : msg
-  );
+): Message[] => {
+  const targetMsg = messages.find(msg => msg.id === messageId);
+  if (!targetMsg || targetMsg.status === status) {
+    return messages; // Return same reference if no change needed
+  }
+  
+  const index = messages.indexOf(targetMsg);
+  const newMessages = [...messages];
+  newMessages[index] = { ...targetMsg, status };
+  return newMessages;
+};
 
 // Helper to update message content
 export const updateMessageContent = (
   messages: Message[],
   messageId: number,
   content: string
-): Message[] =>
-  messages.map(msg =>
-    msg.id === messageId 
-      ? { ...msg, content }
-      : msg
-  );
+): Message[] => {
+  const targetMsg = messages.find(msg => msg.id === messageId);
+  if (!targetMsg || targetMsg.content === content) {
+    return messages; // Return same reference if no change needed
+  }
+  
+  const index = messages.indexOf(targetMsg);
+  const newMessages = [...messages];
+  newMessages[index] = { ...targetMsg, content };
+  return newMessages;
+};
