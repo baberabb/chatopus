@@ -1,4 +1,4 @@
-import { Message, FileAttachment } from '../../types';
+import { Message, FileAttachment, ContentBlock } from '../../types';
 
 export interface MessageState {
   // Core state
@@ -8,7 +8,8 @@ export interface MessageState {
   streaming: {
     conversationId: number | null;
     messageId: number | null;
-    status: 'idle' | 'streaming' | 'error';
+    status: 'idle' | 'streaming' | 'error' | 'complete';
+    isActive: boolean;
   };
   
   // Status
@@ -17,11 +18,14 @@ export interface MessageState {
 
   // Actions
   loadMessages: (conversationId: number) => Promise<void>;
-  sendMessage: (conversationId: number, content: string, attachments?: FileAttachment[]) => Promise<void>;
+  sendMessage: (conversationId: number | null, content: string, attachments?: FileAttachment[]) => Promise<void>;
   editMessage: (conversationId: number, messageId: number, content: string) => Promise<void>;
   cancelMessage: () => Promise<void>;
   appendStreamChunk: (chunk: string) => void;
   clearMessages: (conversationId: number) => void;
+  setStreamComplete: () => void;
+  setStreamStart: () => void;
+  clearStreaming: () => void;
 }
 
 // Response types from backend
@@ -37,10 +41,8 @@ export interface MessageResponse {
 }
 
 export interface SendMessageResponse {
-  reply: {
-    content: string;
-    role: string;
-  };
-  userMessageId: number;
-  assistantMessageId: number;
+  reply: ContentBlock[];
+  user_message_id: number;
+  assistant_message_id: number;
+  conversation_id: number;
 }

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import { ConversationState, Conversation, ConversationResponse } from './types';
+import { SendMessageResponse } from '../message/types';
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
   // State
@@ -43,7 +44,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   createConversation: async () => {
     set({ loading: true, error: null });
     try {
-      const id = await invoke<number>('create_conversation');
+      // Create new conversation using clear_chat_history
+      const id = await invoke<number>('clear_chat_history');
       const newConv: Conversation = {
         id,
         title: 'New Chat',

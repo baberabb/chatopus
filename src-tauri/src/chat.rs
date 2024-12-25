@@ -74,7 +74,29 @@ pub async fn process_message<R: Runtime>(
     let db = &app_state.db;
 
     // Get or create conversation
-    let conversation_id = chat::get_or_create_conversation_cached(&app_state).await?;
+    let conversation_id = match request.conversation_id {
+        Some(id) => {
+            // Verify conversation exists
+            let exists = sqlx::query!(
+                r#"SELECT COUNT(*) as count FROM conversations WHERE id = ?"#,
+                id
+            )
+            .fetch_one(db)
+            .await
+            .map_err(chat::db_error)?
+            .count
+                > 0;
+
+            if !exists {
+                return Err(ProcessMessageError {
+                    message: "Conversation not found".to_string(),
+                    details: Some(format!("Conversation {} does not exist", id)),
+                });
+            }
+            id
+        }
+        None => chat::get_or_create_conversation_cached(&app_state).await?,
+    };
 
     // Get provider configuration
     let (provider_type, api_key, streaming_enabled, model) = {
@@ -83,9 +105,16 @@ pub async fn process_message<R: Runtime>(
             .providers
             .get(&config.active_provider)
             .ok_or_else(|| ProcessMessageError {
-                message: "Provider configuration error".to_string(),
-                details: Some("No provider configured".to_string()),
+                message: "No provider configured".to_string(),
+                details: Some("Please configure a provider in settings".to_string()),
             })?;
+
+        if provider_settings.api_key.is_empty() {
+            return Err(ProcessMessageError {
+                message: "API key not configured".to_string(),
+                details: Some("Please add your API key in settings".to_string()),
+            });
+        }
 
         let streaming = provider_settings
             .parameters

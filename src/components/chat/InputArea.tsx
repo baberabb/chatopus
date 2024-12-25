@@ -5,7 +5,7 @@ import { useStreamEvents } from "../../hooks/useStreamEvents";
 import { FileAttachment } from "../../types";
 
 interface InputAreaProps {
-  onSend: (message: string, attachments?: FileAttachment[]) => void;
+  onSend: (message: string, attachments?: FileAttachment[]) => Promise<void>;
   isStreaming: boolean;
   isCancellable?: boolean;
   onCancel?: () => void;
@@ -105,12 +105,17 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       });
     };
 
-    const handleSend = () => {
+    const handleSend = async () => {
       const trimmedInput = input.trim();
       if ((trimmedInput || attachments.length > 0) && !isStreaming) {
-        onSend(trimmedInput, attachments);
-        setInput("");
-        setAttachments([]);
+        try {
+          await onSend(trimmedInput, attachments);
+          setInput("");
+          setAttachments([]);
+        } catch (error) {
+          console.error("Failed to send message:", error);
+          // Let the error display component handle this
+        }
       }
     };
 
@@ -167,9 +172,9 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
             backgroundColor: theme.surface,
             boxShadow: `0 2px 10px ${theme.shadowColor}10`,
           }}
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            handleSend();
+            await handleSend();
           }}
         >
           <input
@@ -190,10 +195,10 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
+            onKeyDown={async (e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleSend();
+                await handleSend();
               }
             }}
             className="flex-1 bg-transparent px-4 focus:outline-none resize-none h-[22px] max-h-[200px] font-sans leading-[22px] overflow-y-auto my-2"

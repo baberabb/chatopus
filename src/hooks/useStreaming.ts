@@ -1,30 +1,9 @@
-import { useRef, useEffect } from 'react';
-import { listen } from "@tauri-apps/api/event";
-
-// Global ref to track streaming state without triggering re-renders
-let isStreamingRef = false;
+import { useMessageStore } from '../store/message';
 
 export function useStreaming() {
-  const initialized = useRef(false);
-
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-
-    // Set up event listeners that don't trigger re-renders
-    const unlisten = listen("stream-complete", () => {
-      isStreamingRef = false;
-    });
-
-    return () => {
-      unlisten.then(fn => fn());
-    };
-  }, []);
-
+  const { streaming } = useMessageStore();
   return {
-    setStreaming: (value: boolean) => {
-      isStreamingRef = value;
-    },
-    isStreaming: () => isStreamingRef
+    isStreaming: () => streaming.isActive,
+    status: () => streaming.status,
   };
 }

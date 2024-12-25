@@ -9,11 +9,19 @@ export function useChat() {
     loading: conversationLoading,
     error: conversationError,
     loadConversations,
-    setCurrentConversation,
+    setCurrentConversation: setCurrentConversationBase,
     createConversation,
     deleteConversation,
     updateConversation
   } = useConversationStore();
+
+  // Wrap setCurrentConversation to also load messages
+  const setCurrentConversation = async (id: number | null) => {
+    await setCurrentConversationBase(id);
+    if (id) {
+      await loadMessages(id);
+    }
+  };
 
   const {
     messagesByConversation,
@@ -38,8 +46,27 @@ export function useChat() {
   const error = messageError || conversationError;
 
   const handleSendMessage = async (content: string, attachments?: FileAttachment[]) => {
-    if (!currentId) return;
-    await sendMessage(currentId, content, attachments);
+    try {
+      // If no current conversation, create one first
+      if (!currentId) {
+        const newId = await createConversation();
+        await setCurrentConversation(newId);
+      }
+      
+      // Send message
+      await sendMessage(currentId, content, attachments);
+      
+      // Reload conversations to get any updates
+      await loadConversations();
+      
+      // Reload messages to ensure they're up to date
+      if (currentId) {
+        await loadMessages(currentId);
+      }
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      throw error;
+    }
   };
 
   const handleEditMessage = async (messageId: number, content: string) => {

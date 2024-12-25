@@ -25,13 +25,37 @@ const StreamingInput: React.FC<StreamingInputProps> = ({
 }) => {
   const streaming = useStreaming();
   const isStreaming = streaming.isStreaming();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSend = async (
+    content: string,
+    attachments?: FileAttachment[]
+  ) => {
+    try {
+      setError(null);
+      await onSend(content, attachments);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send message");
+      throw err; // Re-throw to let InputArea handle UI state
+    }
+  };
+
   return (
-    <InputArea
-      onSend={onSend}
-      isStreaming={isStreaming}
-      isCancellable={isStreaming}
-      onCancel={onCancel}
-    />
+    <>
+      <InputArea
+        onSend={handleSend}
+        isStreaming={isStreaming}
+        isCancellable={isStreaming}
+        onCancel={onCancel}
+      />
+      {error && (
+        <div className="absolute bottom-20 left-0 right-0 px-4">
+          <div className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm">
+            {error}
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
