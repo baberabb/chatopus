@@ -131,6 +131,7 @@ pub fn run() {
             chat::cancel_message,
             chat::edit_message,
             chat::update_conversation,
+            chat::create_new_convos,
             config::get_config,
             config::update_config,
             config::update_provider_settings,

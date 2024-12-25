@@ -118,14 +118,15 @@ export function useChat() {
 
   // Clear chat
   const clearChat = useCallback(async () => {
+    // TODO: what if we're in the middle of a conversation?
+    // Should we clear the conversation and messages?
     try {
-      const newId = await createConversation();
-      await setCurrentConversationId(newId);
+      await createConversation(); // createConversation now handles setting currentConversationId
       await loadConversations();
     } catch (error) {
       console.error("Failed to clear chat:", error);
     }
-  }, [createConversation, setCurrentConversationId, loadConversations]);
+  }, [createConversation, loadConversations]);
 
   return {
     // State

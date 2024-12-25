@@ -493,3 +493,14 @@ pub async fn create_conversation_version(
 
     Ok(id)
 }
+
+// TODO: HACK
+pub async fn create_new_convo(db: &sqlx::Pool<sqlx::Sqlite>) -> Result<i64, ErrorResponse> {
+    let id = sqlx::query!("INSERT INTO conversations DEFAULT VALUES")
+        .execute(&*db)
+        .await
+        .map_err(|x| x.to_string())
+        .unwrap()
+        .last_insert_rowid();
+    Ok(id)
+}

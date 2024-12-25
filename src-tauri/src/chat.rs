@@ -383,3 +383,11 @@ pub async fn delete_conversation(
 
     Ok(())
 }
+
+// TODO: HACK: This is a temporary command to create new conversations
+#[tauri::command]
+pub async fn create_new_convos(app_handle: AppHandle) -> Result<i64, String> {
+    let app_state = app_handle.state::<AppState>();
+    let db = &app_state.db;
+    chat::create_new_convo(db).await.map_err(|e| e.message)
+}

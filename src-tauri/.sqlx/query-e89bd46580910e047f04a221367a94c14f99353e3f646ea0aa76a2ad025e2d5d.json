@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO conversations DEFAULT VALUES",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "e89bd46580910e047f04a221367a94c14f99353e3f646ea0aa76a2ad025e2d5d"
+}

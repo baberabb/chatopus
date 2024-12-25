@@ -350,7 +350,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
 
       // Create new conversation and get its ID
-      const newId = await invoke<number>('clear_chat_history');
+      const newId = await invoke<number>('create_new_convos');
       console.log('New conversation ID:', newId);
       
       // Load all conversations to get the new one
@@ -362,10 +362,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
         throw new Error('Failed to find newly created conversation');
       }
       
-      // Update conversations list with the new conversation
+      // Update conversations list and set current conversation
+      // #TODO: this might be messing up state. maybe
+      //  set(state => ({
+      //   conversations: [newConversation, ...state.conversations],
+      //   isLoading: false
+      // }));
       set(state => ({
         conversations: [newConversation, ...state.conversations],
-        isLoading: false
+        currentConversationId: newId,
+        messages: [], // Ensure messages are cleared
+        systemMessage: null, // Ensure system message is cleared
+        isLoading: false,
+        error: null // Clear any previous errors
       }));
 
       return newId;
