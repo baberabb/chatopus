@@ -93,12 +93,18 @@ export interface ModelConfig {
 
 // Store state types
 export interface ChatState {
-  // State
+  // Core message state
   messages: Message[];
-  conversations: Conversation[];
-  currentConversationId: number | null;
   error: string | null;
   isLoading: boolean;
+  initialized: boolean;
+
+  // Conversation metadata
+  conversations: Conversation[];
+  currentConversationId: number | null;
+
+  // System message state
+  systemMessage: string | null;
 
   // Message actions
   sendMessage: (

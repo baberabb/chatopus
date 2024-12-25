@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
-import { useZustandTheme } from "../../store";
+import { useZustandTheme, useChatStore } from "../../store";
 import { useStreaming } from "../../hooks/useStreaming";
-import { Message, FileAttachment, Conversation } from "../../types";
+import { Message, FileAttachment, Conversation, ChatState } from "../../types";
 import { useModel } from "../../contexts/ModelContext";
 import ErrorBoundary from "../ErrorBoundary";
 import { SystemMessageEditor } from "./SystemMessageEditor";
@@ -86,21 +86,31 @@ export function ChatContainer() {
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Use store directly to avoid potential timing issues with selectors
+  const store = useChatStore();
   const {
     messages,
-    currentConversationId,
     conversations,
+    currentConversationId,
     isLoading,
     error,
+    initialized,
     sendMessage,
-    handleEdit,
-    cancelMessage,
     updateConversation,
-  } = useChat();
+    cancelMessage,
+  } = store;
 
-  const currentConversation = conversations.find(
-    (c) => c.id === currentConversationId
-  );
+  // Show loading state while store is initializing
+  if (!initialized) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
+      </div>
+    );
+  }
+
+  // Get message editing functionality
+  const { handleEdit } = useChat();
 
   // Get the latest message content for scroll tracking
   const latestMessageContent = messages[messages.length - 1]?.content || "";
@@ -161,17 +171,7 @@ export function ChatContainer() {
 
         {/* System message editor */}
         {currentConversationId && (
-          <SystemMessageEditor
-            systemMessage={currentConversation?.systemMessage}
-            onUpdate={(message) => {
-              if (currentConversationId) {
-                updateConversation(currentConversationId, {
-                  systemMessage: message,
-                });
-              }
-            }}
-            disabled={isLoading || isStreaming}
-          />
+          <SystemMessageEditor disabled={isLoading || isStreaming} />
         )}
 
         {/* Message list */}

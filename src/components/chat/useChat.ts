@@ -1,33 +1,51 @@
 import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useChatStore } from "../../store";
-import { Message } from "../../types";
+import { Message, ChatState } from "../../types";
 import { findMessageById } from "./utils";
 
 export function useChat() {
+  // Use store directly to avoid potential timing issues with selectors
+  const store = useChatStore();
   const {
-    // State
     messages,
     conversations,
     currentConversationId,
     isLoading,
     error,
-    
-    // Message actions
+    initialized,
     sendMessage,
-    
-    // Conversation actions
     loadConversations,
     loadConversation,
     setCurrentConversationId,
     createConversation,
     updateConversation,
     deleteConversation,
-    
-    // Other actions
     setMessages,
     clearMessages,
-  } = useChatStore();
+  } = store;
+
+  // Return early if store is not initialized
+  if (!initialized) {
+    return {
+      messages: [],
+      conversations: [],
+      currentConversationId: null,
+      isLoading: true,
+      error: null,
+      editingMessageId: null,
+      sendMessage: async () => {},
+      handleEdit: async () => {},
+      startEdit: () => {},
+      cancelMessage: async () => {},
+      loadConversations: async () => {},
+      loadConversation: async () => {},
+      setCurrentConversationId: async () => {},
+      updateConversation: async () => {},
+      deleteConversation: async () => {},
+      clearChat: async () => {},
+    };
+  }
 
   // Get streaming state from last message
   const isStreaming = messages[messages.length - 1]?.status === 'streaming';

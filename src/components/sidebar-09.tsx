@@ -42,6 +42,8 @@ import { ModelSettings } from "./settings/ModelSettings";
 import { ThemeToggle } from "./ThemeToggle";
 import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
 import { useZustandTheme, useChatStore } from "../store";
+import { Conversation } from "../types";
+import ErrorBoundary from "./ErrorBoundary";
 
 const data = {
   user: {
@@ -69,7 +71,9 @@ export default function Page() {
         } as React.CSSProperties
       }
     >
-      <AppSidebar setActiveContent={setActiveContent} />
+      <ErrorBoundary>
+        <AppSidebar setActiveContent={setActiveContent} />
+      </ErrorBoundary>
       <SidebarInset className="flex flex-col h-[calc(100vh-64px)]">
         {activeContent === "inbox" ? (
           <ChatContainer />
@@ -100,31 +104,48 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 function AppSidebar({ setActiveContent }: AppSidebarProps) {
   const { setOpen } = useSidebar();
   const { theme } = useZustandTheme();
+  // Use store directly to avoid potential timing issues with selectors
+  const store = useChatStore();
   const {
     conversations,
     currentConversationId,
+    isLoading,
+    error,
+    initialized,
     setCurrentConversationId,
     loadConversations,
     loadConversation,
     deleteConversation,
     createConversation,
-    error,
-    isLoading,
-    cancelMessage,
-  } = useChatStore();
+  } = store;
 
-  // Load conversations
+  // Show loading state while store is initializing
+  if (!initialized) {
+    return (
+      <Sidebar
+        collapsible="icon"
+        className="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row"
+      >
+        <div className="flex justify-center items-center h-full">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
+        </div>
+      </Sidebar>
+    );
+  }
+
+  // Load conversations on mount
   React.useEffect(() => {
     loadConversations();
-  }, [loadConversations]);
+  }, []); // Empty dependency array since loadConversations is stable from store
 
   const handleChatSelect = async (chatId: number) => {
     try {
-      await loadConversation(chatId);
-      setCurrentConversationId(chatId);
+      // setCurrentConversationId will call loadConversation internally
+      await setCurrentConversationId(chatId);
       setOpen(true);
     } catch (err) {
       console.error("Error loading conversation:", err);
+      // Error state is already set by the store actions
     }
   };
 
@@ -135,21 +156,26 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
       // If we're deleting the current conversation, create a new one
       if (currentConversationId === chatId) {
         const newId = await createConversation();
+        // No need to call loadConversations since createConversation handles it
         await setCurrentConversationId(newId);
       }
-      await loadConversations(); // Reload the list after deletion
     } catch (err) {
       console.error("Error deleting conversation:", err);
+      // Error state is already set by the store actions
     }
   };
 
   const handleNewChat = async () => {
     try {
+      // Create conversation and update local state
       const newId: number = await createConversation();
+      // Now that we know the conversation exists, set it as current
       await setCurrentConversationId(newId);
-      await loadConversations();
+      // Open the sidebar to show the new conversation
+      setOpen(true);
     } catch (err) {
       console.error("Error creating new chat:", err);
+      // Error state is already set by store actions
     }
   };
 
@@ -238,7 +264,7 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
                 No conversations yet
               </div>
             ) : (
-              conversations.map((chat) => (
+              conversations.map((chat: Conversation) => (
                 <div
                   key={chat.id}
                   className={`group relative w-full text-left border-b last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${

@@ -26,7 +26,7 @@ import {
   ProviderType
 } from "./types";
 
-// Only handle stream chunks - components handle completion
+// Handle stream events
 listen("stream-response", (event) => {
   const chunk = event.payload as string;
   const lastMessage = useChatStore.getState().messages[useChatStore.getState().messages.length - 1];
@@ -35,13 +35,67 @@ listen("stream-response", (event) => {
   }
 });
 
+// Handle stream completion
+listen("stream-complete", () => {
+  const messages = useChatStore.getState().messages;
+  const lastIndex = messages.length - 1;
+  const lastMessage = messages[lastIndex];
+  
+  if (lastMessage?.status === 'streaming') {
+    logger.state('Store', {
+      action: 'completeStream',
+      messageId: lastMessage.id,
+      before: {
+        messageStatus: lastMessage.status
+      }
+    });
+
+    // Only create new object for the last message
+    const updatedMessage = {
+      ...lastMessage,
+      status: 'complete' as const
+    };
+
+    // Create new array with same references except last message
+    const updatedMessages = [...messages];
+    updatedMessages[lastIndex] = updatedMessage;
+
+    useChatStore.setState({ messages: updatedMessages });
+
+    logger.state('Store', {
+      action: 'completeStream',
+      messageId: lastMessage.id,
+      after: {
+        messageStatus: updatedMessage.status
+      }
+    });
+  }
+});
+
+// Selectors for granular state updates
+const messageSelector = (state: ChatState) => state.messages;
+const conversationSelector = (state: ChatState) => ({
+  conversations: state.conversations,
+  currentConversationId: state.currentConversationId
+});
+const systemMessageSelector = (state: ChatState) => state.systemMessage;
+const errorSelector = (state: ChatState) => state.error;
+const loadingSelector = (state: ChatState) => state.isLoading;
+
+// Split store into smaller stores for more granular updates
 export const useChatStore = create<ChatState>((set, get) => ({
-  // State
+  // Core message state - only updates for streaming/editing
   messages: [],
-  conversations: [],
-  currentConversationId: null,
   error: null,
   isLoading: false,
+  initialized: false,
+
+  // Conversation metadata - only updates when conversation list changes
+  conversations: [],
+  currentConversationId: null,
+
+  // System message state - only updates when system message changes
+  systemMessage: null as string | null,
 
   // Message actions
   sendMessage: async (content: string) => {
@@ -157,7 +211,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearMessages: () => set({ 
     messages: [],
-    error: null
+    error: null,
+    systemMessage: null
   }),
 
   cancelMessage: async () => {
@@ -205,69 +260,141 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // Conversation actions
   loadConversations: async () => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null }); // Clear any previous errors
     try {
       const conversations = await invoke<Conversation[]>('get_conversations');
-      set({ conversations, isLoading: false });
-    } catch (error) {
+      // Sort conversations by most recent first
+      conversations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       set({ 
-        error: error instanceof Error ? error.message : 'Failed to load conversations',
-        isLoading: false 
-      });
-    }
-  },
-
-  loadConversation: async (id: number) => {
-    set({ isLoading: true });
-    try {
-      const messages = await invoke<Message[]>('load_conversation_messages', {
-        conversationId: id
-      });
-      set({ 
-        messages,
-        currentConversationId: id,
+        conversations,
         isLoading: false,
         error: null
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load conversations';
+      console.error('Load conversations error:', errorMessage);
       set({ 
-        error: error instanceof Error ? error.message : 'Failed to load conversation',
-        isLoading: false 
+        error: errorMessage,
+        isLoading: false,
+        conversations: [] // Clear conversations on error
       });
+      throw error; // Re-throw to handle in UI
+    }
+  },
+
+  loadConversation: async (id: number) => {
+    set({ isLoading: true, error: null }); // Clear any previous errors
+    try {
+      // Ensure the conversation exists in our list first
+      const conversations = get().conversations;
+      const conversationExists = conversations.some(c => c.id === id);
+      if (!conversationExists) {
+        throw new Error('Conversation not found');
+      }
+
+      const [messages, conversation] = await Promise.all([
+        invoke<Message[]>('load_conversation_messages', { conversationId: id }),
+        invoke<Conversation>('get_conversation', { id })
+      ]);
+      
+      // Update states separately to minimize re-renders
+      set({ 
+        messages,
+        currentConversationId: id,
+        systemMessage: conversation.systemMessage || null,
+        isLoading: false,
+        error: null
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load conversation';
+      console.error('Load conversation error:', errorMessage);
+      set({ 
+        error: errorMessage,
+        isLoading: false,
+        messages: [], // Clear messages on error
+        systemMessage: null // Clear system message on error
+      });
+      throw error; // Re-throw to handle in UI
     }
   },
 
   setCurrentConversationId: async (id: number | null) => {
     if (id === get().currentConversationId) return;
     
-    set({ currentConversationId: id });
+    set({ 
+      currentConversationId: id,
+      error: null // Clear any previous errors
+    });
+    
     if (id) {
-      await get().loadConversation(id);
+      try {
+        set({ isLoading: true });
+        await get().loadConversation(id);
+      } catch (error) {
+        // Error is already set by loadConversation
+        set({ currentConversationId: null }); // Reset on error
+      }
     } else {
       set({ messages: [] });
     }
   },
 
   createConversation: async () => {
-    // Always create a new conversation
-    const newId = await invoke<number>('clear_chat_history');
-    
-    // Clear current state
-    set({ 
-      currentConversationId: null, 
-      messages: [],
-      error: null
-    });
-    
-    // Load updated conversation list
-    await get().loadConversations();
-    return newId;
+    try {
+      set({ 
+        currentConversationId: null, 
+        messages: [],
+        error: null,
+        systemMessage: null,
+        isLoading: true
+      });
+
+      // Create new conversation and get its ID
+      const newId = await invoke<number>('clear_chat_history');
+      console.log('New conversation ID:', newId);
+      
+      // Load all conversations to get the new one
+      const conversations = await invoke<Conversation[]>('get_conversations');
+      console.log('All conversations:', conversations);
+      const newConversation = conversations.find(c => c.id === newId);
+      
+      if (!newConversation) {
+        throw new Error('Failed to find newly created conversation');
+      }
+      
+      // Update conversations list with the new conversation
+      set(state => ({
+        conversations: [newConversation, ...state.conversations],
+        isLoading: false
+      }));
+
+      return newId;
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to create conversation',
+        isLoading: false 
+      });
+      throw error; // Re-throw to handle in UI
+    }
   },
 
   updateConversation: async (id: number, updates: Partial<Conversation>) => {
     try {
       await invoke('update_conversation', { id, updates });
-      await get().loadConversations();
+      
+      // Handle system message updates separately
+      if ('systemMessage' in updates) {
+        set({ systemMessage: updates.systemMessage || null });
+      }
+      
+      // Only reload conversations if metadata changed (title, preview, etc)
+      const metadataChanged = Object.keys(updates).some(key => 
+        key !== 'systemMessage' && key !== 'messages'
+      );
+      
+      if (metadataChanged) {
+        await get().loadConversations();
+      }
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to update conversation' });
     }
@@ -279,7 +406,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ 
         currentConversationId: null, 
         messages: [],
-        error: null
+        error: null,
+        systemMessage: null
       });
     }
 
@@ -411,9 +539,21 @@ initializeStore().then(({ theme, modelConfig }) => {
   // Apply theme after initialization
   applyTheme(theme.type, theme.values);
 
-  // Load initial conversations
-  useChatStore.getState().loadConversations();
+  // Load initial conversations and mark store as initialized
+  useChatStore.getState().loadConversations().then(() => {
+    useChatStore.setState({ initialized: true });
+  });
 });
+
+// Hooks for accessing specific parts of state
+export const useMessages = () => useChatStore((state: ChatState) => state.messages);
+export const useConversations = () => useChatStore((state: ChatState) => ({
+  conversations: state.conversations,
+  currentConversationId: state.currentConversationId
+}));
+export const useSystemMessage = () => useChatStore((state: ChatState) => state.systemMessage);
+export const useChatError = () => useChatStore((state: ChatState) => state.error);
+export const useChatLoading = () => useChatStore((state: ChatState) => state.isLoading);
 
 export const useZustandTheme = () => {
   const store = useThemeStore();
