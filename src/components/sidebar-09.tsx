@@ -104,20 +104,21 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 function AppSidebar({ setActiveContent }: AppSidebarProps) {
   const { setOpen } = useSidebar();
   const { theme } = useZustandTheme();
-  // Use store directly to avoid potential timing issues with selectors
-  const store = useChatStore();
-  const {
-    conversations,
-    currentConversationId,
-    isLoading,
-    error,
-    initialized,
-    setCurrentConversationId,
-    loadConversations,
-    loadConversation,
-    deleteConversation,
-    createConversation,
-  } = store;
+  // Use specific selectors to avoid unnecessary rerenders
+  const conversations = useChatStore((state) => state.conversations);
+  const currentConversationId = useChatStore(
+    (state) => state.currentConversationId
+  );
+  const isLoading = useChatStore((state) => state.isLoading);
+  const error = useChatStore((state) => state.error);
+  const initialized = useChatStore((state) => state.initialized);
+  const setCurrentConversationId = useChatStore(
+    (state) => state.setCurrentConversationId
+  );
+  const loadConversations = useChatStore((state) => state.loadConversations);
+  const loadConversation = useChatStore((state) => state.loadConversation);
+  const deleteConversation = useChatStore((state) => state.deleteConversation);
+  const createConversation = useChatStore((state) => state.createConversation);
 
   // Show loading state while store is initializing
   if (!initialized) {

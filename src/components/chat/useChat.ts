@@ -5,25 +5,21 @@ import { Message, ChatState } from "../../types";
 import { findMessageById } from "./utils";
 
 export function useChat() {
-  // Use store directly to avoid potential timing issues with selectors
-  const store = useChatStore();
-  const {
-    messages,
-    conversations,
-    currentConversationId,
-    isLoading,
-    error,
-    initialized,
-    sendMessage,
-    loadConversations,
-    loadConversation,
-    setCurrentConversationId,
-    createConversation,
-    updateConversation,
-    deleteConversation,
-    setMessages,
-    clearMessages,
-  } = store;
+  // Use specific selectors to avoid unnecessary rerenders
+  const messages = useChatStore((state) => state.messages);
+  const conversations = useChatStore((state) => state.conversations);
+  const currentConversationId = useChatStore((state) => state.currentConversationId);
+  const isLoading = useChatStore((state) => state.isLoading);
+  const error = useChatStore((state) => state.error);
+  const initialized = useChatStore((state) => state.initialized);
+  const sendMessage = useChatStore((state) => state.sendMessage);
+  const loadConversations = useChatStore((state) => state.loadConversations);
+  const loadConversation = useChatStore((state) => state.loadConversation);
+  const setCurrentConversationId = useChatStore((state) => state.setCurrentConversationId);
+  const createConversation = useChatStore((state) => state.createConversation);
+  const updateConversation = useChatStore((state) => state.updateConversation);
+  const deleteConversation = useChatStore((state) => state.deleteConversation);
+  const setMessages = useChatStore((state) => state.setMessages);
 
   // Return early if store is not initialized
   if (!initialized) {

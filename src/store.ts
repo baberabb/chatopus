@@ -137,7 +137,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
 
       // Load conversation list in background
-      get().loadConversations();
+      // get().loadConversations();
 
     } catch (error) {
       // Roll back optimistic updates on error
