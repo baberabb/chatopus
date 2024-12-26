@@ -66,15 +66,7 @@ pub fn get_provider_registry() -> Arc<ProviderRegistry> {
 /// Initialize default providers
 pub fn init() -> Result<(), core::error::Error> {
     println!("Initializing API models...");
-    let result = providers::registry::register_default_providers(&PROVIDER_REGISTRY);
-    match &result {
-        Ok(_) => println!("API models initialized successfully"),
-        Err(e) => println!("Failed to initialize API models: {}", e),
-    }
-    result
-}
-
-/// Get list of registered providers
-pub fn list_providers() -> Result<Vec<String>, core::error::Error> {
-    PROVIDER_REGISTRY.list_providers()
+    providers::registry::register_default_providers(&PROVIDER_REGISTRY)?;
+    println!("API models initialized successfully");
+    Ok(())
 }

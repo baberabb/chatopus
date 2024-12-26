@@ -153,13 +153,28 @@ pub fn run() {
             let runtime = tokio::runtime::Runtime::new()?;
             let db = runtime.block_on(setup_db(&data_dir))?;
 
+            // Initialize API providers first
+            apimodels::init()?;
+
             // Setup app state using app directly
             app.manage(chat::CancellationState::default());
-            app.manage(config::ConfigState(parking_lot::Mutex::new(
-                config::AppConfig::default(),
-            )));
-            // Initialize API providers
-            apimodels::init()?;
+
+            // Create and initialize config with providers
+            let mut default_config = config::AppConfig::default();
+            let registry = apimodels::get_provider_registry();
+            let providers = registry.list_providers().map_err(|e| e.to_string())?;
+            println!("Available providers: {:?}", providers);
+
+            // Ensure all registered providers are in config
+            for provider in providers {
+                if !default_config.providers.contains_key(&provider) {
+                    default_config
+                        .providers
+                        .insert(provider.clone(), config::ProviderSettings::default());
+                }
+            }
+
+            app.manage(config::ConfigState(parking_lot::Mutex::new(default_config)));
 
             app.manage(AppState {
                 db,

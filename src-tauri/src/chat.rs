@@ -77,7 +77,7 @@ pub async fn process_message<R: Runtime>(
     let conversation_id = chat::get_or_create_conversation_cached(&app_state).await?;
 
     // Get provider configuration
-    let (provider_type, api_key, streaming_enabled, model) = {
+    let (provider_type, streaming_enabled, provider_settings) = {
         let config = config_state.0.lock();
         let provider_settings = config
             .providers
@@ -95,9 +95,8 @@ pub async fn process_message<R: Runtime>(
 
         (
             config.active_provider.clone(),
-            provider_settings.api_key.clone(),
             streaming,
-            provider_settings.model.clone(),
+            provider_settings.clone(),
         )
     };
 
@@ -118,10 +117,9 @@ pub async fn process_message<R: Runtime>(
     .await?;
     tx.commit().await.map_err(chat::db_error)?;
 
-    // Get provider registry and create provider
+    // Get provider from registry
     let registry = get_provider_registry();
-    let builder = ProviderBuilder::new(provider_type.clone(), api_key).with_model(model);
-    let provider = registry.create_provider(&provider_type, builder)?;
+    let provider = registry.get_provider(&provider_type)?;
 
     // Load conversation history
     let history = chat::get_messages_for_conversation(db, conversation_id).await?;
@@ -143,7 +141,9 @@ pub async fn process_message<R: Runtime>(
             .send_message_streaming(
                 history,
                 ProviderOptions {
+                    model: Some(provider_settings.model.clone()),
                     stream: true,
+                    parameters: Some(provider_settings.parameters.clone()),
                     ..Default::default()
                 },
                 Box::new(move |chunk| {
@@ -182,7 +182,9 @@ pub async fn process_message<R: Runtime>(
             .send_message(
                 history,
                 ProviderOptions {
+                    model: Some(provider_settings.model.clone()),
                     stream: false,
+                    parameters: Some(provider_settings.parameters.clone()),
                     ..Default::default()
                 },
             )

@@ -105,13 +105,10 @@ export function ModelSettings() {
 
   const handleProviderChange = async (newProvider: ProviderType) => {
     try {
-      // First save the current provider's settings
-      if (activeProvider) {
-        await handleSaveSettings(activeProvider as ProviderType);
-      }
-      // Then switch to the new provider
+      // Switch to the new provider
       await setProvider(newProvider);
     } catch (error) {
+      // Error will be handled by useProviderSettings hook
       console.error("Failed to switch provider:", error);
     }
   };
