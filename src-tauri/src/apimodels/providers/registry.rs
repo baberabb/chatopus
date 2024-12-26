@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use super::{AnthropicProvider, DynProvider};
+use super::{AnthropicProvider, DynProvider, OpenAIProvider};
 use crate::apimodels::core::{
     error::Error,
     provider::{Provider, ProviderBuilder},
@@ -88,8 +88,12 @@ pub fn register_default_providers(registry: &ProviderRegistry) -> std::result::R
         Ok(Arc::new(AnthropicProvider::new(builder)) as DynProvider)
     })?;
 
+    // Register OpenAI provider
+    registry.register_provider("openai", |builder| {
+        Ok(Arc::new(OpenAIProvider::new(builder)) as DynProvider)
+    })?;
+
     // Add other default providers here
-    // registry.register_provider("openai", |builder| { ... })?;
     // registry.register_provider("openrouter", |builder| { ... })?;
 
     Ok(())
@@ -113,6 +117,7 @@ mod tests {
 
         let providers = registry.list_providers()?;
         assert!(providers.contains(&"anthropic".to_string()));
+        assert!(providers.contains(&"openai".to_string()));
 
         Ok(())
     }

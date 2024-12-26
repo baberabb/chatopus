@@ -103,6 +103,19 @@ export function ModelSettings() {
     }
   };
 
+  const handleProviderChange = async (newProvider: ProviderType) => {
+    try {
+      // First save the current provider's settings
+      if (activeProvider) {
+        await handleSaveSettings(activeProvider as ProviderType);
+      }
+      // Then switch to the new provider
+      await setProvider(newProvider);
+    } catch (error) {
+      console.error("Failed to switch provider:", error);
+    }
+  };
+
   return (
     <Card className="p-6">
       <div className="space-y-6">
@@ -114,7 +127,7 @@ export function ModelSettings() {
               <TabsTrigger
                 key={provider}
                 value={provider}
-                onClick={() => setProvider(provider as ProviderType)}
+                onClick={() => handleProviderChange(provider as ProviderType)}
                 className="flex-1"
               >
                 {config.name}
@@ -129,7 +142,9 @@ export function ModelSettings() {
                   provider={provider as ProviderType}
                   settings={safeSettings[provider]}
                   isActive={provider === activeProvider}
-                  onSelect={() => setProvider(provider as ProviderType)}
+                  onSelect={() =>
+                    handleProviderChange(provider as ProviderType)
+                  }
                   onSettingChange={(key, value) =>
                     updateProviderSetting(provider as ProviderType, key, value)
                   }
