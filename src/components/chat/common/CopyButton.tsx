@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { Copy, Check } from "lucide-react";
-import { useZustandTheme } from "../../store";
+import { useZustandTheme } from "@/store";
 
 interface CopyButtonProps {
   text: string;

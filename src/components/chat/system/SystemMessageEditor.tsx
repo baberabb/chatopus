@@ -1,14 +1,14 @@
 import React, { useState } from "react";
-import { Button } from "../ui/button";
-import { Textarea } from "../ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   useZustandTheme,
   useChatStore,
   useSystemMessage,
   useChatLoading,
-} from "../../store";
-import type { ChatState } from "../../types";
+} from "@/store";
+import type { ChatState } from "@/types";
 
 // Define stable selectors outside component
 const selectInitialized = (state: ChatState) => state.initialized;

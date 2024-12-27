@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useChatStore } from "../../store";
-import { Message, ChatState } from "../../types";
-import { findMessageById } from "./utils";
+import { useChatStore } from "@/store";
+// import { Message, ChatState } from "../../types";
+import { findMessageById } from "@/components/chat";
 
 export function useChat() {
   // Use specific selectors to avoid unnecessary rerenders

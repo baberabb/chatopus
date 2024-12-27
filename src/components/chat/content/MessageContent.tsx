@@ -9,7 +9,7 @@ import { useZustandTheme } from "../../../store";
 import { Message, FileAttachment } from "../../../types";
 import { CodeBlock } from "./CodeBlock";
 import { formatMessageRole } from "../utils/messageUtils";
-import { logger } from "../../../utils/logger";
+// import { logger } from "../../../utils/logger";
 
 interface MessageContentProps {
   message: Message;

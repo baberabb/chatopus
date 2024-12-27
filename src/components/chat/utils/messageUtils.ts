@@ -1,4 +1,4 @@
-import { Message } from "./types";
+import { Message } from "@/types";
 
 /**
  * Helper function to generate consistent colors for avatars based on string input

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { ScrollHandlerProps } from '../types/index';
-import { scrollToBottom } from '../utils';
+import { scrollToBottom } from '../utils/messageUtils';
 
 /**
  * Hook to handle auto-scrolling behavior in the chat container

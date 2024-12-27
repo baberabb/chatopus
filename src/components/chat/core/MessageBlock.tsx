@@ -5,7 +5,7 @@ import { UserAvatar } from "../common/UserAvatar";
 import { MessageContent } from "../content/MessageContent";
 import { MessageActions } from "../actions/MessageActions";
 import { MessageEditor } from "../actions/MessageEditor";
-import { logger } from "../../../utils/logger";
+// import { logger } from "../../../utils/logger";
 
 interface MessageBlockProps {
   message: Message;

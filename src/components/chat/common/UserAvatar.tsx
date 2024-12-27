@@ -1,6 +1,6 @@
 import React from "react";
 import Avatar from "@mui/material/Avatar";
-import { stringAvatar } from "./utils";
+import { stringAvatar } from "../utils/messageUtils";
 
 interface UserAvatarProps {
   user: string;
