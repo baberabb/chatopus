@@ -1,6 +1,6 @@
 import React from "react";
 import { ThumbsUp, Copy, Pencil } from "lucide-react";
-import { useZustandTheme } from "../../store";
+import { useZustandTheme } from "../../../store";
 
 interface MessageActionsProps {
   onEdit?: () => void;

@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Paperclip, Zap, CornerRightUp, XCircle, X } from "lucide-react";
-import { useZustandTheme } from "../../store";
-import { useStreamEvents } from "../../hooks/useStreamEvents";
-import { FileAttachment } from "../../types";
+import { useZustandTheme } from "../../../store";
+import { useStreamEvents } from "../../../hooks/useStreamEvents";
+import { FileAttachment } from "../types/index";
 
 interface InputAreaProps {
   onSend: (message: string, attachments?: FileAttachment[]) => void;

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { useZustandTheme } from "../../store";
-import { Message } from "./types";
-import { UserAvatar } from "./UserAvatar";
-import { MessageContent } from "./MessageContent";
-import { MessageActions } from "./MessageActions";
-import { MessageEditor } from "./MessageEditor";
-import { logger } from "../../utils/logger";
+import { useZustandTheme } from "../../../store";
+import { Message, ContentBlock } from "../types/index";
+import { UserAvatar } from "../common/UserAvatar";
+import { MessageContent } from "../content/MessageContent";
+import { MessageActions } from "../actions/MessageActions";
+import { MessageEditor } from "../actions/MessageEditor";
+import { logger } from "../../../utils/logger";
 
 interface MessageBlockProps {
   message: Message;
@@ -26,7 +26,16 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
   const [isHovered, setIsHovered] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(message.content);
+    const content = Array.isArray(message.content)
+      ? message.content.map((block) => block.text || "").join("\n")
+      : message.content;
+    navigator.clipboard.writeText(content);
+  };
+
+  const getMessageContent = (content: string | ContentBlock[]): string => {
+    return Array.isArray(content)
+      ? content.map((block) => block.text || "").join("\n")
+      : content;
   };
 
   return (
@@ -43,15 +52,19 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
       <div className="flex-grow min-w-0 pl-3 pr-4">
         {message.isEditing ? (
           <MessageEditor
-            content={message.content}
+            content={getMessageContent(message.content)}
             onSave={(content) => onEdit?.(message.id, content)}
-            onCancel={() => onEdit?.(message.id, message.content)}
+            onCancel={() =>
+              onEdit?.(message.id, getMessageContent(message.content))
+            }
           />
         ) : (
           <div className="flex justify-between">
             <MessageContent message={message} isStreaming={isStreaming} />
             <MessageActions
-              onEdit={() => onEdit?.(message.id, message.content)}
+              onEdit={() =>
+                onEdit?.(message.id, getMessageContent(message.content))
+              }
               onReact={() => onReact(message.id)}
               onCopy={handleCopy}
               isVisible={isHovered && message.role === "user"}

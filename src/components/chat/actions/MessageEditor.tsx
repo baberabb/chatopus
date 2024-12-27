@@ -1,7 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import { Check, X } from "lucide-react";
-
-import { ContentBlock } from "../../types";
+import { ContentBlock } from "../types/index";
 
 interface MessageEditorProps {
   content: string | ContentBlock[];

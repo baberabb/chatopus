@@ -34,7 +34,7 @@ import {
   useSidebar,
 } from "./ui/sidebar";
 import { Switch } from "./ui/switch";
-import { ChatContainer } from "./chat/ChatContainer";
+import { ChatContainer } from "./chat/core/ChatContainer";
 import { SidebarNavigation } from "./SidebarNavigation";
 import { TrashContent } from "./TrashContent";
 import Settings from "./settings/Settings";
