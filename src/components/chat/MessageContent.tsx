@@ -2,6 +2,27 @@
  * MessageContent.tsx
  * Renders the content of a chat message with support for markdown, code blocks,
  * file attachments, and reactions.
+ *
+ * Streaming Architecture:
+ * 1. Message Flow
+ * - Receives streaming state from MessageBlock
+ * - Passes streaming state to child CodeBlock components
+ * - Updates content in real-time during streaming
+ *
+ * 2. Content Processing
+ * - Parses markdown content using ReactMarkdown
+ * - Detects and renders code blocks with syntax highlighting
+ * - Maintains formatting during streaming updates
+ *
+ * 3. Component Hierarchy
+ * MessageBlock → MessageContent → CodeBlock
+ * - MessageBlock: Manages message-level streaming state
+ * - MessageContent: Processes content and coordinates updates
+ * - CodeBlock: Handles real-time code rendering
+ *
+ * This component ensures proper synchronization between streaming updates
+ * and UI rendering, particularly for code blocks which require special
+ * handling to maintain proper formatting during streaming.
  */
 
 import React, { useMemo } from "react";
@@ -19,8 +40,10 @@ import { useStreaming } from "../../hooks/useStreaming";
 /**
  * Props for the MessageContent component
  * @interface MessageContentProps
- * @property {Message} message - The message object to display
+ * @property {Message} message - The message object containing content and metadata
  * @property {boolean} isStreaming - Whether content is being streamed
+ *                                  This prop is passed down to CodeBlock components
+ *                                  to optimize their rendering behavior
  */
 interface MessageContentProps {
   message: Message;

@@ -2,6 +2,27 @@
  * CodeBlock.tsx
  * A component for displaying and executing code blocks with syntax highlighting
  * and interactive features like copying and running code.
+ *
+ * Key features:
+ * 1. Real-time content updates during streaming
+ * - Uses useCodeEditor hook to manage content state
+ * - Forces SyntaxHighlighter re-renders with key prop during updates
+ * - Maintains proper formatting during streaming
+ *
+ * 2. Interactive features
+ * - Syntax highlighting with theme support
+ * - Copy to clipboard functionality
+ * - Code execution for supported languages
+ * - Double-click to edit capability
+ *
+ * 3. Accessibility
+ * - Proper ARIA labels and roles
+ * - Keyboard navigation support
+ * - Status indicators for running code
+ *
+ * The component carefully manages streaming updates to ensure code blocks
+ * render properly while content is being streamed, rather than waiting
+ * for the complete content to arrive.
  */
 
 import React, { useMemo } from "react";
@@ -15,9 +36,10 @@ import { useCodeEditor } from "./hooks/useCodeEditor";
 /**
  * Props for the CodeBlock component
  * @interface CodeBlockProps
- * @property {string} language - Programming language of the code
- * @property {string} value - Initial code content
- * @property {boolean} isStreaming - Whether content is being streamed
+ * @property {string} language - Programming language for syntax highlighting
+ * @property {string} value - Code content to display
+ * @property {boolean} isStreaming - Whether content is actively streaming
+ *                                  Used to optimize rendering behavior
  */
 interface CodeBlockProps {
   language: string;
