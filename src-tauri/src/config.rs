@@ -139,7 +139,7 @@ impl Default for AppConfig {
 
 pub struct ConfigState(pub parking_lot::Mutex<AppConfig>);
 
-const STORE_PATH: &str = "config.json";
+pub const STORE_PATH: &str = ".config/chatopus/config.json";
 
 #[tauri::command]
 pub async fn get_config(

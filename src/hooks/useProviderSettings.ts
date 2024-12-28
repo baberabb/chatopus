@@ -31,13 +31,12 @@ export function useProviderSettings() {
     value: any
   ) => {
     try {
-      // Get current settings with fallback to empty object
-      const currentSettings = settings[provider] || {
-        api_key: "",
-        model: "",
-        parameters: {},
-        customParameters: {},
-      };
+      // Get current settings from state
+      const currentSettings = settings[provider];
+      
+      if (!currentSettings) {
+        throw new Error("Provider settings not found");
+      }
 
       // Create new settings object
       const newSettings = {

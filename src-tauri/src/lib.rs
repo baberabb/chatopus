@@ -5,6 +5,7 @@ use std::error::Error as StdError;
 use std::str::FromStr;
 use std::sync::Arc;
 use tauri::Manager;
+use tauri_plugin_store::StoreExt;
 use tokio::sync::OnceCell;
 
 type Db = Pool<Sqlite>;
@@ -159,22 +160,58 @@ pub fn run() {
             // Setup app state using app directly
             app.manage(chat::CancellationState::default());
 
-            // Create and initialize config with providers
-            let mut default_config = config::AppConfig::default();
-            let registry = apimodels::get_provider_registry();
-            let providers = registry.list_providers().map_err(|e| e.to_string())?;
-            println!("Available providers: {:?}", providers);
+            // Load stored config first
+            let store = app
+                .store(config::STORE_PATH)
+                .map_err(|e| format!("Failed to access store: {}", e))?;
 
-            // Ensure all registered providers are in config
-            for provider in providers {
-                if !default_config.providers.contains_key(&provider) {
-                    default_config
-                        .providers
-                        .insert(provider.clone(), config::ProviderSettings::default());
+            let loaded_config = match store.get("config") {
+                Some(stored_config) => match serde_json::from_value(stored_config.clone()) {
+                    Ok(config_value) => config_value,
+                    Err(_) => config::AppConfig::default(),
+                },
+                None => config::AppConfig::default(),
+            };
+
+            // Initialize config state with loaded or default config
+            app.manage(config::ConfigState(parking_lot::Mutex::new(
+                loaded_config.clone(),
+            )));
+
+            // Update registry with loaded config
+            let registry = apimodels::get_provider_registry();
+            for (provider, settings) in loaded_config.providers.iter() {
+                let mut builder = crate::apimodels::core::provider::ProviderBuilder::new(
+                    provider,
+                    &settings.api_key,
+                )
+                .with_model(&settings.model);
+
+                if let Some(ref api_version) = settings.api_version {
+                    builder = builder.with_api_version(api_version);
+                }
+                if let Some(ref base_url) = settings.base_url {
+                    builder = builder.with_base_url(base_url);
+                }
+                if let Some(timeout) = settings.timeout_seconds {
+                    builder = builder.with_timeout(timeout);
+                }
+                if let Some(retries) = settings.retry_attempts {
+                    builder = builder.with_retries(retries);
+                }
+                if let Some(ref headers) = settings.additional_headers {
+                    builder = builder.with_headers(headers.clone());
+                }
+                if let Some(ref custom_params) = settings.custom_parameters {
+                    builder = builder.with_custom_parameters(custom_params.clone());
+                }
+
+                builder = builder.with_parameters(settings.parameters.clone());
+
+                if let Err(e) = registry.create_or_update_provider(provider, builder) {
+                    eprintln!("Failed to update provider {}: {}", provider, e);
                 }
             }
-
-            app.manage(config::ConfigState(parking_lot::Mutex::new(default_config)));
 
             app.manage(AppState {
                 db,

@@ -137,7 +137,7 @@ export interface ThemeStore {
 }
 
 export interface ModelStore {
-  config: ModelConfig;
+  config: ModelConfig | null;
   initialized: boolean;
   setConfig: (config: ModelConfig) => void;
   updateProviderSettings: (

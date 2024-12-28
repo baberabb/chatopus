@@ -12,6 +12,7 @@ import {
   ChatState,
   ThemeStore,
   ModelStore,
+  ModelConfig,
   Message,
   Conversation,
   Theme,
@@ -436,87 +437,66 @@ export const useThemeStore = create<ThemeStore>((set) => ({
     }),
 }));
 
-export const useModelStore = create<ModelStore>((set) => ({
-  config: {
-    active_provider: "anthropic" as ProviderType,
-    providers: {
-      anthropic: {
-        api_key: "",
-        model: "claude-3-sonnet-20240320",
-        parameters: {
-          max_tokens: 1024,
-          streaming: true,
-          temperature: 0.7,
-          top_p: 1,
-          top_k: 5
-        },
-        customParameters: {},
-      },
-      openai: {
-        api_key: "",
-        model: "gpt-4-turbo-preview",
-        parameters: {
-          max_tokens: 1024,
-          streaming: true,
-          temperature: 0.7,
-          top_p: 1,
-          presence_penalty: 0,
-          frequency_penalty: 0,
-          tool_calls: false,
-          tool_choice: "none"
-        },
-        customParameters: {},
-      },
-      openrouter: {
-        api_key: "",
-        model: "anthropic/claude-3-opus",
-        parameters: {
-          max_tokens: 1024,
-          streaming: true,
-          temperature: 0.7,
-          top_p: 1,
-          top_k: 5,
-          presence_penalty: 0,
-          frequency_penalty: 0
-        },
-        customParameters: {},
-      },
-    } as Record<ProviderType, ProviderSettings>
-  },
+export const useModelStore = create<ModelStore>((set, get) => ({
+  config: null,
   initialized: false,
-  setConfig: (config) => {
-    localStorage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(config));
-    set({ config });
+  setConfig: async (config) => {
+    try {
+      await invoke('update_config', { newConfig: config });
+      set({ config });
+    } catch (error) {
+      console.error('Failed to update config:', error);
+      throw error;
+    }
   },
-  updateProviderSettings: (provider, settings) =>
-    set((state) => {
-      // Only create new objects for the changed provider
-      const newProviders = {
-        ...state.config.providers,
-        [provider]: settings
-      };
-      const newConfig = {
-        ...state.config,
-        providers: newProviders
-      };
-      localStorage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
-      return { config: newConfig };
-    }),
-  setActiveProvider: (provider) =>
-    set((state) => {
-      // Only update active_provider field
-      if (provider === state.config.active_provider) return state;
-      const newConfig = {
-        ...state.config,
-        active_provider: provider
-      };
-      localStorage.setItem(MODEL_CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
-      return { config: newConfig };
-    }),
+  updateProviderSettings: async (provider, settings) => {
+    try {
+      const currentConfig = get().config;
+      if (!currentConfig) {
+        throw new Error('Config not initialized');
+      }
+
+      await invoke('update_provider_settings', { provider, settings });
+      
+      set((state) => ({
+        config: {
+          active_provider: currentConfig.active_provider,
+          providers: {
+            ...currentConfig.providers,
+            [provider]: settings
+          }
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to update provider settings:', error);
+      throw error;
+    }
+  },
+  setActiveProvider: async (provider) => {
+    try {
+      const currentConfig = get().config;
+      if (!currentConfig) {
+        throw new Error('Config not initialized');
+      }
+
+      if (provider === currentConfig.active_provider) return;
+      
+      await invoke('set_active_provider', { provider });
+      
+      set((state) => ({
+        config: {
+          active_provider: provider,
+          providers: currentConfig.providers
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to set active provider:', error);
+      throw error;
+    }
+  },
 }));
 
 const THEME_STORAGE_KEY = "theme";
-const MODEL_CONFIG_STORAGE_KEY = "model_config";
 
 const applyTheme = (themeType: ThemeType, theme: Theme) => {
   requestAnimationFrame(() => {
@@ -528,25 +508,28 @@ const applyTheme = (themeType: ThemeType, theme: Theme) => {
 };
 
 // Initialize stores asynchronously
-initializeStore().then(({ theme, modelConfig }) => {
-  useThemeStore.setState({ 
-    themeType: theme.type, 
-    theme: theme.values,
-    initialized: true 
-  });
-  useModelStore.setState({ 
-    config: modelConfig,
-    initialized: true 
-  });
-  
-  // Apply theme after initialization
-  applyTheme(theme.type, theme.values);
+(async () => {
+  try {
+    // Get initial config from backend
+    const config = await invoke<ModelConfig>('get_config');
+    useModelStore.setState({ config, initialized: true });
 
-  // Load initial conversations and mark store as initialized
-  useChatStore.getState().loadConversations().then(() => {
+    // Initialize theme
+    const { theme } = await initializeStore();
+    useThemeStore.setState({ 
+      themeType: theme.type, 
+      theme: theme.values,
+      initialized: true 
+    });
+    applyTheme(theme.type, theme.values);
+
+    // Load conversations
+    await useChatStore.getState().loadConversations();
     useChatStore.setState({ initialized: true });
-  });
-});
+  } catch (error) {
+    console.error('Failed to initialize stores:', error);
+  }
+})();
 
 // Hooks for accessing specific parts of state
 export const useMessages = () => useChatStore((state: ChatState) => state.messages);
