@@ -117,7 +117,7 @@ export function ChatContainer() {
   }, []);
 
   // Use store directly to avoid potential timing issues with selectors
-  const store = useChatStore();
+  // const store = useChatStore();
   const {
     messages,
     currentConversationId,
@@ -126,7 +126,7 @@ export function ChatContainer() {
     initialized,
     sendMessage,
     cancelMessage,
-  } = store;
+  } = useChatStore();
 
   // Show loading state while store is initializing
   if (!initialized) {
