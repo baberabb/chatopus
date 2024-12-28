@@ -4,11 +4,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { logger } from "./utils/logger";
 import {
-  createOptimisticMessage,
-  createOptimisticAssistantMessage,
-  isOptimisticMessage,
-} from "./store/optimistic";
-import {
   ChatState,
   ThemeStore,
   ModelStore,
@@ -95,6 +90,54 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // Message actions
   sendMessage: async (content: string, attachments?: FileAttachment[]) => {
+
+    let tempIdCounter = -1;
+
+    const createTempId = () => {
+      tempIdCounter--;
+      return tempIdCounter;
+    };
+
+
+    const createOptimisticMessage = (
+        content: string,
+        role: string,
+        status: Message['status'] = 'complete',
+        attachments?: FileAttachment[]
+    ): Message => ({
+      id: createTempId(),
+      content,
+      role,
+      timestamp: new Date().toISOString(),
+      status,
+      attachments,
+    });
+
+// Create optimistic assistant message
+    const createOptimisticAssistantMessage = (model?: string): Message => {
+      const message: Message = {
+        id: createTempId(),
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+        status: 'streaming',
+        model
+      };
+
+      // Log optimistic message creation
+      logger.state('Store', {
+        action: 'create_optimistic_message',
+        message
+      });
+
+      return message;
+    };
+
+// Helper to check if message is optimistic
+    const isOptimisticMessage = (id: number) => id < 0;
+
+
+
     try {
       // Get current model from model store
       const modelStore = useModelStore.getState();
