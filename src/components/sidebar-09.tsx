@@ -1,19 +1,4 @@
-/**
- * sidebar-09.tsx
- *
- * A comprehensive sidebar component that provides navigation, chat history management,
- * and user settings functionality. This component serves as the main navigation
- * interface for the application.
- *
- * Features:
- * - Collapsible sidebar with icon-only and expanded states
- * - Chat history management with conversation listing
- * - User profile and settings dropdown
- * - Theme-aware styling
- */
-
 import * as React from "react";
-// Icons
 import {
   BadgeCheck,
   Bell,
@@ -23,9 +8,6 @@ import {
   Trash2,
   Plus,
 } from "lucide-react";
-import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
-
-// UI Components
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import {
   DropdownMenu,
@@ -52,27 +34,17 @@ import {
   useSidebar,
 } from "./ui/sidebar";
 import { Switch } from "./ui/switch";
-
-// Feature Components
 import { ChatContainer } from "./chat/ChatContainer";
 import { SidebarNavigation } from "./SidebarNavigation";
 import { TrashContent } from "./TrashContent";
 import Settings from "./settings/Settings";
 import { ModelSettings } from "./settings/ModelSettings";
 import { ThemeToggle } from "./ThemeToggle";
+import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
+import { useZustandTheme, useChatStore } from "../store";
+import { Conversation } from "../types";
 import ErrorBoundary from "./ErrorBoundary";
 
-// Store and Types
-import {
-  useZustandTheme,
-  useChatStore,
-  useConversations,
-  useChatError,
-  useChatLoading,
-} from "../store";
-import { Conversation } from "../types";
-
-// Mock user data - TODO: Replace with real user authentication
 const data = {
   user: {
     name: "Alex Chen",
@@ -81,33 +53,6 @@ const data = {
   },
 };
 
-/**
- * Type definitions for the sidebar components
- */
-interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  setActiveContent: (content: "inbox" | "trash" | "settings" | "model") => void;
-}
-
-interface NavUserProps {
-  user: {
-    name: string;
-    email: string;
-    avatar: string;
-  };
-}
-
-/**
- * Main page component that renders the sidebar and content area.
- * Manages the active content state and provides theme-aware styling.
- *
- * The layout consists of:
- * 1. A collapsible sidebar with navigation and chat history
- * 2. A main content area that displays one of:
- *    - Chat interface (inbox)
- *    - Trash management
- *    - Model settings
- *    - General settings
- */
 export default function Page() {
   const [activeContent, setActiveContent] = React.useState<
     "inbox" | "trash" | "settings" | "model"
@@ -152,37 +97,30 @@ export default function Page() {
   );
 }
 
-/**
- * AppSidebar component that handles the main navigation and chat history.
- * Manages conversation state and provides chat management functionality.
- *
- * Features:
- * - Loads and displays chat conversations
- * - Handles chat selection and deletion
- * - Creates new conversations
- * - Shows loading and error states
- */
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  setActiveContent: (content: "inbox" | "trash" | "settings" | "model") => void;
+}
+
 function AppSidebar({ setActiveContent }: AppSidebarProps) {
   const { setOpen } = useSidebar();
   const { theme } = useZustandTheme();
-
-  // Use pre-defined hooks for better performance
-  const { conversations, currentConversationId } = useConversations();
-  const isLoading = useChatLoading();
-  const error = useChatError();
+  // Use specific selectors to avoid unnecessary rerenders
+  const conversations = useChatStore((state) => state.conversations);
+  const currentConversationId = useChatStore(
+    (state) => state.currentConversationId
+  );
+  const isLoading = useChatStore((state) => state.isLoading);
+  const error = useChatStore((state) => state.error);
   const initialized = useChatStore((state) => state.initialized);
+  const setCurrentConversationId = useChatStore(
+    (state) => state.setCurrentConversationId
+  );
+  const loadConversations = useChatStore((state) => state.loadConversations);
+  const loadConversation = useChatStore((state) => state.loadConversation);
+  const deleteConversation = useChatStore((state) => state.deleteConversation);
+  const createConversation = useChatStore((state) => state.createConversation);
 
-  // Actions from store
-  const {
-    setCurrentConversationId,
-    loadConversations,
-    loadConversation,
-    deleteConversation,
-    createConversation,
-  } = useChatStore();
-
-  // Display a loading spinner while the chat store initializes
-  // This prevents any UI flicker or invalid states from being shown
+  // Show loading state while store is initializing
   if (!initialized) {
     return (
       <Sidebar
@@ -196,18 +134,11 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
     );
   }
 
-  // Load conversations when the component mounts
-  // This ensures we have the latest chat history available
+  // Load conversations on mount
   React.useEffect(() => {
     loadConversations();
   }, []); // Empty dependency array since loadConversations is stable from store
 
-  /**
-   * Handles selecting a chat from the sidebar
-   * 1. Sets the selected chat as current
-   * 2. Loads its messages
-   * 3. Opens the sidebar if it's collapsed
-   */
   const handleChatSelect = async (chatId: number) => {
     try {
       // setCurrentConversationId will call loadConversation internally
@@ -219,13 +150,6 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
     }
   };
 
-  /**
-   * Handles deleting a chat conversation
-   * 1. Prevents event bubbling to avoid selecting the chat
-   * 2. Deletes the conversation from the store
-   * 3. If deleting current chat, creates a new one
-   * 4. Updates the current conversation ID
-   */
   const handleDelete = async (e: React.MouseEvent, chatId: number) => {
     e.stopPropagation(); // Prevent chat selection when clicking delete
     try {
@@ -242,12 +166,6 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
     }
   };
 
-  /**
-   * Creates a new chat conversation
-   * 1. Creates a new conversation in the store
-   * 2. Sets it as the current conversation
-   * 3. Opens the sidebar to show the new chat
-   */
   const handleNewChat = async () => {
     try {
       // Create conversation and update local state
@@ -267,7 +185,6 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
       collapsible="icon"
       className="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row"
     >
-      {/* Left sidebar - Contains app navigation and user profile */}
       <Sidebar
         collapsible="none"
         className="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r"
@@ -304,7 +221,6 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
         </SidebarFooter>
       </Sidebar>
 
-      {/* Right sidebar - Contains chat history and conversation management */}
       <Sidebar
         collapsible="none"
         className="hidden flex-1 md:flex"
@@ -313,7 +229,6 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
           borderColor: theme.border,
         }}
       >
-        {/* Chat history header with actions */}
         <SidebarHeader
           className="gap-3.5 border-b p-4"
           style={{ borderColor: theme.border }}
@@ -337,8 +252,6 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
           </div>
           <SidebarInput placeholder="Search conversations..." />
         </SidebarHeader>
-
-        {/* Chat history list with loading/error states */}
         <SidebarContent>
           <div className="px-0">
             {isLoading ? (
@@ -361,7 +274,6 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
                   style={{ borderColor: theme.border }}
                 >
                   <div className="w-full p-4">
-                    {/* Delete conversation button */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -373,7 +285,6 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
                       <Trash2 className="h-4 w-4" />
                     </button>
 
-                    {/* Chat selection button with preview */}
                     <button
                       // TODO: remove padding later
                       className="w-full flex flex-col items-start gap-2 text-left pl-8"
@@ -413,12 +324,15 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
   );
 }
 
-/**
- * NavUser component that displays the user profile and settings dropdown.
- * Provides access to user account settings, billing, notifications, and logout.
- * Adapts its layout based on mobile/desktop view.
- */
-function NavUser({ user }: NavUserProps) {
+function NavUser({
+  user,
+}: {
+  user: {
+    name: string;
+    email: string;
+    avatar: string;
+  };
+}) {
   const { isMobile } = useSidebar();
   const { theme } = useZustandTheme();
 
@@ -426,7 +340,6 @@ function NavUser({ user }: NavUserProps) {
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
-          {/* User profile button that triggers dropdown */}
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
@@ -448,15 +361,12 @@ function NavUser({ user }: NavUserProps) {
               <CaretSortIcon className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
-
-          {/* Dropdown menu with user actions */}
           <DropdownMenuContent
             className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
             side={isMobile ? "bottom" : "right"}
             align="end"
             sideOffset={4}
           >
-            {/* User profile header in dropdown */}
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
@@ -475,8 +385,6 @@ function NavUser({ user }: NavUserProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-
-            {/* Upgrade option */}
             <DropdownMenuGroup>
               <DropdownMenuItem>
                 <Sparkles className="mr-2 h-4 w-4" />
@@ -484,8 +392,6 @@ function NavUser({ user }: NavUserProps) {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-
-            {/* Account management options */}
             <DropdownMenuGroup>
               <DropdownMenuItem>
                 <BadgeCheck className="mr-2 h-4 w-4" />
@@ -501,8 +407,6 @@ function NavUser({ user }: NavUserProps) {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-
-            {/* Logout option */}
             <DropdownMenuItem>
               <LogOut className="mr-2 h-4 w-4" />
               Log out
