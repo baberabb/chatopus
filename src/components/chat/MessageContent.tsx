@@ -1,3 +1,9 @@
+/**
+ * MessageContent.tsx
+ * Renders the content of a chat message with support for markdown, code blocks,
+ * file attachments, and reactions.
+ */
+
 import React, { useMemo, useEffect, useState } from "react";
 import { ThumbsUp, Download } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -6,19 +12,39 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
 import { useZustandTheme } from "../../store";
-import { Message, FileAttachment } from "../../types";
+import { Message, FileAttachment, ContentBlock } from "../../types";
 import { CodeBlock } from "./CodeBlock";
 import { formatMessageRole } from "./utils";
 import { logger } from "../../utils/logger";
 
+/**
+ * Props for the MessageContent component
+ * @interface MessageContentProps
+ * @property {Message} message - The message object to display
+ * @property {boolean} isStreaming - Optional flag indicating if content is being streamed
+ */
 interface MessageContentProps {
   message: Message;
   isStreaming?: boolean;
 }
 
+// Markdown plugins configuration
 const markdownPlugins = [remarkGfm, remarkBreaks, remarkMath];
 
-const AttachmentPreview: React.FC<{ attachment: FileAttachment }> = ({
+/**
+ * Props for the AttachmentPreview component
+ * @interface AttachmentPreviewProps
+ * @property {FileAttachment} attachment - The file attachment to preview
+ */
+interface AttachmentPreviewProps {
+  attachment: FileAttachment;
+}
+
+/**
+ * Renders a preview of a file attachment with download capability
+ * @component
+ */
+const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
   attachment,
 }) => {
   const { theme } = useZustandTheme();
@@ -28,6 +54,8 @@ const AttachmentPreview: React.FC<{ attachment: FileAttachment }> = ({
     <div
       className="relative group flex items-start gap-2 p-2 rounded-lg max-w-xs"
       style={{ backgroundColor: `${theme.surface}80` }}
+      role="figure"
+      aria-label={`Attachment: ${attachment.name}`}
     >
       {isImage && attachment.previewUrl ? (
         <a
@@ -35,6 +63,7 @@ const AttachmentPreview: React.FC<{ attachment: FileAttachment }> = ({
           target="_blank"
           rel="noopener noreferrer"
           className="block"
+          aria-label={`View ${attachment.name} in new tab`}
         >
           <img
             src={attachment.previewUrl}
@@ -51,9 +80,10 @@ const AttachmentPreview: React.FC<{ attachment: FileAttachment }> = ({
             href={attachment.url}
             download={attachment.name}
             className="p-1 rounded hover:bg-opacity-10 hover:bg-white"
-            title="Download file"
+            title={`Download ${attachment.name}`}
+            aria-label={`Download ${attachment.name}`}
           >
-            <Download size={16} />
+            <Download size={16} aria-hidden="true" />
           </a>
         </div>
       )}
@@ -61,6 +91,21 @@ const AttachmentPreview: React.FC<{ attachment: FileAttachment }> = ({
   );
 };
 
+/**
+ * Formats message content for display, handling both string and ContentBlock[] types
+ * @param content - The message content to format
+ * @returns Formatted content string
+ */
+const formatMessageContent = (content: string | ContentBlock[]): string => {
+  if (typeof content === "string") return content;
+  return content.map((block) => block.text || "").join("\n");
+};
+
+/**
+ * MessageContent component renders the main content of a chat message
+ * including markdown, code blocks, attachments, and reactions
+ * @component
+ */
 export const MessageContent: React.FC<MessageContentProps> = ({
   message,
   isStreaming: initialStreaming = false,
@@ -70,33 +115,55 @@ export const MessageContent: React.FC<MessageContentProps> = ({
   useStreamEvents(() => {
     setIsStreaming(false);
   });
+
   const { theme } = useZustandTheme();
   const isAssistant = message.role === "assistant";
 
-  const markdownComponents = {
-    // @ts-ignore
-    code({ className, children, ...props }) {
-      const match = /language-(\w+)/.exec(className || "");
-      const inline = !match;
-      return inline ? (
-        <code
-          className={`${className} bg-slate-100 dark:bg-slate-800 rounded px-1 py-0.5`}
-          {...props}
-        >
-          {children}
-        </code>
-      ) : (
-        <CodeBlock
-          language={match[1]}
-          value={String(children)}
-          isStreaming={isStreaming}
-        />
-      );
-    },
-  };
+  // Markdown component configuration
+  const markdownComponents = useMemo(
+    () => ({
+      code: ({
+        className,
+        children,
+        ...props
+      }: {
+        className?: string;
+        children: React.ReactNode;
+        [key: string]: any;
+      }) => {
+        const match = /language-(\w+)/.exec(className || "");
+        const inline = !match;
+        return inline ? (
+          <code
+            className={`${className} bg-slate-100 dark:bg-slate-800 rounded px-1 py-0.5`}
+            {...props}
+          >
+            {children}
+          </code>
+        ) : (
+          <CodeBlock
+            language={match[1]}
+            value={String(children)}
+            isStreaming={isStreaming}
+          />
+        );
+      },
+    }),
+    [isStreaming]
+  );
+
+  // Format message content for display
+  const displayContent = useMemo(
+    () => formatMessageContent(message.content),
+    [message.content]
+  );
 
   return (
-    <div className="flex-1 min-w-0 overflow-hidden">
+    <div
+      className="flex-1 min-w-0 overflow-hidden"
+      role="article"
+      aria-label={`${message.role}'s message`}
+    >
       <div className="flex items-baseline mb-1">
         <span
           className="text-sm font-medium mr-2"
@@ -112,13 +179,19 @@ export const MessageContent: React.FC<MessageContentProps> = ({
           {message.timestamp}
         </time>
       </div>
+
       {message.attachments && message.attachments.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2">
+        <div
+          className="flex flex-wrap gap-2 mb-2"
+          role="group"
+          aria-label="Message attachments"
+        >
           {message.attachments.map((attachment) => (
             <AttachmentPreview key={attachment.id} attachment={attachment} />
           ))}
         </div>
       )}
+
       <div
         className="prose prose-slate dark:prose-invert prose-code:before:content-none prose-code:after:content-none max-w-none font-sans leading-relaxed tracking-normal break-words text-[hsl(var(--chat-content))]"
         aria-live={isStreaming ? "polite" : "off"}
@@ -127,11 +200,10 @@ export const MessageContent: React.FC<MessageContentProps> = ({
           remarkPlugins={markdownPlugins}
           components={markdownComponents}
         >
-          {Array.isArray(message.content)
-            ? message.content[0]?.text || ""
-            : message.content}
+          {displayContent}
         </ReactMarkdown>
       </div>
+
       {(message.reactions?.thumbsUp ?? 0) > 0 && (
         <div
           className="mt-2 inline-flex items-center rounded-full px-2 py-1"

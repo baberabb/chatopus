@@ -1,11 +1,26 @@
+/**
+ * MessageBlock.tsx
+ * Renders an individual message in the chat interface with support for editing,
+ * reactions, and hover interactions.
+ */
+
 import React, { useState } from "react";
 import { useZustandTheme } from "../../store";
-import { Message } from "./types";
+import { Message, ContentBlock } from "../../types";
 import { UserAvatar } from "./UserAvatar";
 import { MessageContent } from "./MessageContent";
 import { MessageActions } from "./MessageActions";
 import { MessageEditor } from "./MessageEditor";
 
+/**
+ * Props for the MessageBlock component
+ * @interface MessageBlockProps
+ * @property {Message} message - The message object to display
+ * @property {function} onReact - Callback function for message reactions
+ * @property {function} onEdit - Optional callback function for editing messages
+ * @property {number | null} conversationId - Optional ID of the current conversation
+ * @property {boolean} isStreaming - Optional flag indicating if the message is currently streaming
+ */
 interface MessageBlockProps {
   message: Message;
   onReact: (messageId: number) => void;
@@ -14,6 +29,11 @@ interface MessageBlockProps {
   isStreaming?: boolean;
 }
 
+/**
+ * MessageBlock component displays a single message with user avatar, content,
+ * and interactive elements like edit and react buttons
+ * @component
+ */
 export const MessageBlock: React.FC<MessageBlockProps> = ({
   message,
   onReact,
@@ -23,9 +43,36 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
   const { theme } = useZustandTheme();
   const [isHovered, setIsHovered] = useState(false);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(message.content);
+  /**
+   * Converts message content to a string format suitable for copying
+   * @param content - Message content that can be either string or ContentBlock array
+   * @returns Formatted string representation of the content
+   */
+  const formatContentForCopy = (content: string | ContentBlock[]): string => {
+    if (typeof content === "string") return content;
+    return content.map((block) => block.text || "").join("\n");
   };
+
+  /**
+   * Handles copying message content to clipboard
+   * Includes error handling for clipboard operations
+   */
+  const handleCopy = async () => {
+    try {
+      const formattedContent = formatContentForCopy(message.content);
+      await navigator.clipboard.writeText(formattedContent);
+    } catch (error) {
+      console.error("Failed to copy message:", error);
+      // Could integrate with a toast notification system here
+    }
+  };
+
+  /**
+   * Determines if message actions should be visible
+   * Only shows actions for user messages when hovered
+   */
+  const shouldShowActions =
+    isHovered && message.role === "user" && !isStreaming;
 
   return (
     <div
@@ -35,24 +82,31 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
       onMouseLeave={() => setIsHovered(false)}
       style={{ backgroundColor: isHovered ? theme.surface : "transparent" }}
     >
+      {/* Avatar section */}
       <div className="w-10 flex-shrink-0 flex justify-center">
         <UserAvatar user={message.role} />
       </div>
+
+      {/* Message content section */}
       <div className="flex-grow min-w-0 pl-3 pr-4">
         {message.isEditing ? (
           <MessageEditor
-            content={message.content}
+            content={formatContentForCopy(message.content)}
             onSave={(content) => onEdit?.(message.id, content)}
-            onCancel={() => onEdit?.(message.id, message.content)}
+            onCancel={() =>
+              onEdit?.(message.id, formatContentForCopy(message.content))
+            }
           />
         ) : (
           <div className="flex justify-between">
             <MessageContent message={message} isStreaming={isStreaming} />
             <MessageActions
-              onEdit={() => onEdit?.(message.id, message.content)}
+              onEdit={() =>
+                onEdit?.(message.id, formatContentForCopy(message.content))
+              }
               onReact={() => onReact(message.id)}
               onCopy={handleCopy}
-              isVisible={isHovered && message.role === "user"}
+              isVisible={shouldShowActions}
             />
           </div>
         )}

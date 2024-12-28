@@ -1,3 +1,15 @@
+/**
+ * ChatContainer.tsx
+ * Main chat interface component that handles message display, input, and streaming functionality.
+ *
+ * Key features:
+ * - Displays messages in a scrollable container
+ * - Handles message streaming state
+ * - Manages auto-scrolling behavior
+ * - Supports message editing and reactions
+ * - Displays system messages and error states
+ */
+
 import React, { useRef, useEffect, useState } from "react";
 import { useZustandTheme, useChatStore } from "../../store";
 import { useStreaming } from "../../hooks/useStreaming";
@@ -12,12 +24,21 @@ import { useChat } from "./useChat";
 import { JupyterConnect } from "../JupyterConnect";
 import { scrollToBottom } from "./utils";
 
+/**
+ * Props for the StreamingInput component
+ * @interface StreamingInputProps
+ * @property {function} onSend - Callback function to send a new message
+ * @property {function} onCancel - Callback function to cancel ongoing message streaming
+ */
 interface StreamingInputProps {
   onSend: (content: string, attachments?: FileAttachment[]) => Promise<void>;
   onCancel: () => Promise<void>;
 }
 
-// Separate component that handles streaming state
+/**
+ * StreamingInput component handles the chat input area and streaming state
+ * @component
+ */
 const StreamingInput: React.FC<StreamingInputProps> = ({
   onSend,
   onCancel,
@@ -34,6 +55,14 @@ const StreamingInput: React.FC<StreamingInputProps> = ({
   );
 };
 
+/**
+ * Props for the StreamingMessage component
+ * @interface StreamingMessageProps
+ * @property {Message} message - The message object to display
+ * @property {function} onReact - Callback function for message reactions
+ * @property {function} onEdit - Callback function for editing messages
+ * @property {number | null} conversationId - ID of the current conversation
+ */
 interface StreamingMessageProps {
   message: Message;
   onReact: (messageId: number) => void;
@@ -41,24 +70,31 @@ interface StreamingMessageProps {
   conversationId: number | null;
 }
 
-// Separate component that handles streaming state
+/**
+ * StreamingMessage component handles individual message display and streaming state
+ * @component
+ */
 const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
-    ({ message, onReact, onEdit, conversationId }) => {
-      const streaming = useStreaming();
-      const isStreaming = streaming.isStreaming();
-      return (
-          <MessageBlock
-              message={message}
-              onReact={onReact}
-              onEdit={onEdit}
-              conversationId={conversationId}
-              isStreaming={message.status === "streaming" && isStreaming}
-          />
-      );
-    },
-    (prevProps, nextProps) => prevProps.message === nextProps.message
+  ({ message, onReact, onEdit, conversationId }) => {
+    const streaming = useStreaming();
+    const isStreaming = streaming.isStreaming();
+    return (
+      <MessageBlock
+        message={message}
+        onReact={onReact}
+        onEdit={onEdit}
+        conversationId={conversationId}
+        isStreaming={message.status === "streaming" && isStreaming}
+      />
+    );
+  },
+  (prevProps, nextProps) => prevProps.message === nextProps.message
 );
 
+/**
+ * Main chat container component that orchestrates the chat interface
+ * @component
+ */
 export function ChatContainer() {
   const { theme } = useZustandTheme();
   const { currentModel } = useModel();
@@ -67,7 +103,7 @@ export function ChatContainer() {
   const isStreaming = streaming.isStreaming();
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
-  // Handle scroll events
+  // Handle scroll events to determine auto-scroll behavior
   useEffect(() => {
     const container = messageListRef.current;
     if (!container) return;
@@ -104,13 +140,10 @@ export function ChatContainer() {
     );
   }
 
-  // Get message editing functionality
   const { handleEdit } = useChat();
-
-  // Get the latest message content for scroll tracking
   const latestMessageContent = messages[messages.length - 1]?.content || "";
 
-  // Scroll to bottom when messages change or during streaming
+  // Handle auto-scrolling behavior
   useEffect(() => {
     if (!shouldAutoScroll) return;
 
@@ -118,25 +151,27 @@ export function ChatContainer() {
       // Smooth scroll during streaming
       scrollToBottom(messageListRef.current, true);
     } else {
-      // For non-streaming cases, add a small delay to allow DOM to update
       const isLatestMessageFromUser =
         messages[messages.length - 1]?.role === "user";
-
-      // Only add delay for assistant messages that were previously streaming
       const wasStreaming =
         messages[messages.length - 1]?.status === "streaming";
+
+      // Add delay for assistant messages that were previously streaming
       if (!isLatestMessageFromUser && wasStreaming) {
         setTimeout(() => {
           scrollToBottom(messageListRef.current, true);
-        }, 100); // Small delay to let DOM update
+        }, 100);
       } else {
         scrollToBottom(messageListRef.current, !isLatestMessageFromUser);
       }
     }
   }, [messages.length, latestMessageContent, isStreaming, shouldAutoScroll]);
 
+  /**
+   * Handles message reactions (TODO: Implement persistence)
+   * @param messageId - ID of the message being reacted to
+   */
   const handleReact = (messageId: number) => {
-    // TODO: Implement reaction persistence
     console.log("React to message:", messageId);
   };
 
@@ -184,15 +219,14 @@ export function ChatContainer() {
               Start a new conversation
             </div>
           ) : (
-            messages.map((msg, index) => (
-              <React.Fragment key={msg.id}>
-                <StreamingMessage
-                  message={msg}
-                  onReact={handleReact}
-                  onEdit={handleEdit}
-                  conversationId={currentConversationId}
-                />
-              </React.Fragment>
+            messages.map((msg) => (
+              <StreamingMessage
+                key={msg.id}
+                message={msg}
+                onReact={handleReact}
+                onEdit={handleEdit}
+                conversationId={currentConversationId}
+              />
             ))
           )}
           {error && (

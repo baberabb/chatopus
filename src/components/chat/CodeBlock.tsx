@@ -1,22 +1,40 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+/**
+ * CodeBlock.tsx
+ * A component for displaying and executing code blocks with syntax highlighting
+ * and interactive features like copying and running code.
+ */
+
+import React, { useMemo } from "react";
 import { Play, Copy } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/default-highlight";
 import { vs2015 } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { useZustandTheme } from "../../store";
+import { useCodeExecution } from "./hooks/useCodeExecution";
+import { useCodeEditor } from "./hooks/useCodeEditor";
 
+/**
+ * Props for the CodeBlock component
+ * @interface CodeBlockProps
+ * @property {string} language - Programming language of the code
+ * @property {string} value - Initial code content
+ * @property {boolean} isStreaming - Whether content is being streamed
+ */
 interface CodeBlockProps {
   language: string;
   value: string;
   isStreaming?: boolean;
 }
 
+/**
+ * Props for the CodeBlockButton component
+ * @interface CodeBlockButtonProps
+ */
 interface CodeBlockButtonProps {
   onClick: () => void;
   icon: React.ReactElement<{
     size?: number;
     className?: string;
-    [key: string]: any; // Allow any other props the icon might need
+    "aria-hidden"?: boolean | "true" | "false";
   }>;
   label: string;
   disabled?: boolean;
@@ -24,6 +42,10 @@ interface CodeBlockButtonProps {
   variant?: "default" | "highlight";
 }
 
+/**
+ * Button component for code block actions
+ * @component
+ */
 const CodeBlockButton: React.FC<CodeBlockButtonProps> = ({
   onClick,
   icon,
@@ -35,13 +57,14 @@ const CodeBlockButton: React.FC<CodeBlockButtonProps> = ({
   const iconWithProps = React.cloneElement(icon, {
     size: 14,
     className: variant === "highlight" ? "text-yellow-400" : "text-gray-300",
+    "aria-hidden": "true",
   });
 
   return (
     <button
       onClick={onClick}
       className={`p-1.5 rounded hover:bg-opacity-75 transition-colors flex items-center gap-1 ${
-        disabled ? "opacity-50" : ""
+        disabled ? "opacity-50 cursor-not-allowed" : ""
       }`}
       style={{ backgroundColor: "rgba(255, 255, 255, 0.1)" }}
       title={title}
@@ -54,113 +77,47 @@ const CodeBlockButton: React.FC<CodeBlockButtonProps> = ({
   );
 };
 
-const useCodeExecution = (code: string, language: string) => {
-  const [isRunning, setIsRunning] = useState(false);
-  const [output, setOutput] = useState<string | null>(null);
-
-  const executeCode = async (): Promise<string> => {
-    switch (language.toLowerCase()) {
-      case "python": {
-        const msgid = await invoke<string>("execute_code", { code });
-        return await invoke("receive_message", { msgid });
-      }
-      case "html": {
-        const label = `html-preview-${Date.now()}`;
-        await invoke("create_preview", {
-          label,
-          content: code,
-          title: "HTML Preview",
-          width: 800,
-          height: 600,
-        });
-        return "HTML opened in new window";
-      }
-      default:
-        return `Language ${language} is not supported yet`;
-    }
-  };
-
-  const runCode = async () => {
-    setIsRunning(true);
-    setOutput(null);
-    try {
-      const response = await executeCode();
-      setOutput(response);
-    } catch (error) {
-      console.error("Error running code:", error);
-      setOutput(`Error: ${error}`);
-    }
-    setIsRunning(false);
-  };
-
-  return { isRunning, output, runCode, setOutput };
-};
-
-const useCodeEditor = (initialValue: string, isStreaming: boolean) => {
-  const [code, setCode] = useState(initialValue);
-  const [isEditing, setIsEditing] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (isStreaming) {
-      setCode(initialValue);
-    }
-  }, [initialValue, isStreaming]);
-
-  const adjustTextareaHeight = () => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = "auto";
-      textarea.style.height = `${textarea.scrollHeight}px`;
-    }
-  };
-
-  useEffect(() => {
-    if (isEditing) {
-      adjustTextareaHeight();
-    }
-  }, [isEditing, code]);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const target = e.target as HTMLTextAreaElement;
-      const start = target.selectionStart;
-      const end = target.selectionEnd;
-      const newCode = code.substring(0, start) + "  " + code.substring(end);
-      setCode(newCode);
-      setTimeout(() => {
-        target.selectionStart = target.selectionEnd = start + 2;
-      }, 0);
-    }
-  };
-
-  return {
-    code,
-    setCode,
-    isEditing,
-    setIsEditing,
-    textareaRef,
-    adjustTextareaHeight,
-    handleKeyDown,
-  };
-};
-
+/**
+ * CodeBlock component for displaying and executing code
+ * @component
+ */
 export const CodeBlock: React.FC<CodeBlockProps> = ({
   language,
   value: initialValue,
   isStreaming = false,
 }) => {
   const { theme } = useZustandTheme();
-  const { code, setCode, isEditing, setIsEditing, textareaRef, handleKeyDown } =
-    useCodeEditor(initialValue, isStreaming);
-  const { isRunning, output, runCode } = useCodeExecution(code, language);
+
+  // Initialize code editor state
+  const {
+    code,
+    setCode,
+    isEditing,
+    textareaRef,
+    handleKeyDown,
+    startEditing,
+    stopEditing,
+  } = useCodeEditor(initialValue, isStreaming);
+
+  // Initialize code execution state
+  const { isRunning, output, error, runCode } = useCodeExecution(
+    code,
+    language
+  );
 
   const isExecutable = ["python", "html"].includes(language.toLowerCase());
   const displayCode = output ? `${code}\n\n// Output:\n${output}` : code;
+  const hasError = error !== null;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(displayCode);
+  /**
+   * Handles copying code to clipboard
+   */
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(displayCode);
+    } catch (err) {
+      console.error("Failed to copy code:", err);
+    }
   };
 
   const capitalizedLanguage = useMemo(
@@ -174,6 +131,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
       role="region"
       aria-label={`${capitalizedLanguage} code block`}
     >
+      {/* Header with language indicator and actions */}
       <div
         className="flex items-center justify-between px-4 py-2"
         style={{
@@ -221,13 +179,14 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
         </div>
       </div>
 
+      {/* Code editor/viewer section */}
       <div className="relative">
         {isEditing ? (
           <textarea
             ref={textareaRef}
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            onBlur={() => setIsEditing(false)}
+            onBlur={stopEditing}
             onKeyDown={handleKeyDown}
             className="w-full overflow-hidden p-4 bg-opacity-50 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
             style={{
@@ -237,10 +196,11 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
             }}
             autoFocus
             aria-label="Code editor"
+            spellCheck="false"
           />
         ) : (
           <div
-            onDoubleClick={() => setIsEditing(true)}
+            onDoubleClick={startEditing}
             role="textbox"
             tabIndex={0}
             aria-label="Code display (double-click to edit)"
@@ -261,6 +221,32 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           </div>
         )}
       </div>
+
+      {/* Error display */}
+      {hasError && (
+        <div
+          className="p-4 bg-red-900 bg-opacity-25 border-t border-red-700"
+          role="alert"
+          aria-live="polite"
+        >
+          <pre className="text-red-400 text-sm whitespace-pre-wrap">
+            {error}
+          </pre>
+        </div>
+      )}
+
+      {/* Loading indicator */}
+      {isRunning && (
+        <div
+          className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+          role="status"
+          aria-label="Running code..."
+        >
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent" />
+        </div>
+      )}
     </div>
   );
 };
+
+CodeBlock.displayName = "CodeBlock";
