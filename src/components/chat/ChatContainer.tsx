@@ -1,93 +1,35 @@
 /**
  * ChatContainer.tsx
- * Main chat interface component that handles message display, input, and streaming functionality.
+ * Main chat interface component that orchestrates the chat experience.
  *
- * Key features:
- * - Displays messages in a scrollable container
- * - Handles message streaming state
- * - Manages auto-scrolling behavior
- * - Supports message editing and reactions
- * - Displays system messages and error states
+ * Architecture:
+ * - Uses modular components for messages and input
+ * - Implements custom hooks for complex behaviors
+ * - Manages global state through store integration
+ *
+ * Features:
+ * - Real-time message streaming
+ * - Automatic scrolling behavior
+ * - Error handling and recovery
+ * - System message support
+ * - Message editing and reactions
+ * - Theme integration
  */
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef } from "react";
 import { useZustandTheme, useChatStore } from "../../store";
 import { useStreaming } from "../../hooks/useStreaming";
-import { Message, FileAttachment } from "../../types";
 import { useModel } from "../../contexts/ModelContext";
+import { useChat } from "./useChat";
+import { useAutoScroll } from "./hooks/useAutoScroll";
+
+// Component imports
 import ErrorBoundary from "../ErrorBoundary";
 import { SystemMessageEditor } from "./SystemMessageEditor";
-import { InputArea } from "./InputArea";
 import { ErrorDisplay } from "../ErrorDisplay";
-import { MessageBlock } from "./MessageBlock";
-import { useChat } from "./useChat";
 import { JupyterConnect } from "../JupyterConnect";
-import { scrollToBottom } from "./utils";
-
-/**
- * Props for the StreamingInput component
- * @interface StreamingInputProps
- * @property {function} onSend - Callback function to send a new message
- * @property {function} onCancel - Callback function to cancel ongoing message streaming
- */
-interface StreamingInputProps {
-  onSend: (content: string, attachments?: FileAttachment[]) => Promise<void>;
-  onCancel: () => Promise<void>;
-}
-
-/**
- * StreamingInput component handles the chat input area and streaming state
- * @component
- */
-const StreamingInput: React.FC<StreamingInputProps> = ({
-  onSend,
-  onCancel,
-}) => {
-  const { isStreaming } = useStreaming();
-  return (
-    <InputArea
-      onSend={onSend}
-      isStreaming={isStreaming}
-      isCancellable={isStreaming}
-      onCancel={onCancel}
-    />
-  );
-};
-
-/**
- * Props for the StreamingMessage component
- * @interface StreamingMessageProps
- * @property {Message} message - The message object to display
- * @property {function} onReact - Callback function for message reactions
- * @property {function} onEdit - Callback function for editing messages
- * @property {number | null} conversationId - ID of the current conversation
- */
-interface StreamingMessageProps {
-  message: Message;
-  onReact: (messageId: number) => void;
-  onEdit: (messageId: number, content: string) => Promise<void>;
-  conversationId: number | null;
-}
-
-/**
- * StreamingMessage component handles individual message display and streaming state
- * @component
- */
-const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
-  ({ message, onReact, onEdit, conversationId }) => {
-    const { isStreaming } = useStreaming();
-    return (
-      <MessageBlock
-        message={message}
-        onReact={onReact}
-        onEdit={onEdit}
-        conversationId={conversationId}
-        isStreaming={message.status === "streaming" && isStreaming}
-      />
-    );
-  },
-  (prevProps, nextProps) => prevProps.message === nextProps.message
-);
+import { StreamingMessage } from "./messages/StreamingMessage";
+import { StreamingInput } from "./input/StreamingInput";
 
 /**
  * Main chat container component that orchestrates the chat interface
@@ -98,26 +40,8 @@ export function ChatContainer() {
   const { currentModel } = useModel();
   const messageListRef = useRef<HTMLDivElement>(null);
   const { isStreaming } = useStreaming();
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-
-  // Handle scroll events to determine auto-scroll behavior
-  useEffect(() => {
-    const container = messageListRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-      const isAtBottom =
-        container.scrollHeight - container.scrollTop <=
-        container.clientHeight + 100;
-      setShouldAutoScroll(isAtBottom);
-    };
-
-    container.addEventListener("scroll", handleScroll);
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, []);
 
   // Use store directly to avoid potential timing issues with selectors
-  const store = useChatStore();
   const {
     messages,
     currentConversationId,
@@ -126,7 +50,21 @@ export function ChatContainer() {
     initialized,
     sendMessage,
     cancelMessage,
-  } = store;
+  } = useChatStore();
+
+  const { handleEdit } = useChat();
+
+  // Initialize auto-scroll behavior
+  useAutoScroll({
+    containerRef: messageListRef,
+    messages,
+    isStreaming,
+  });
+
+  // Handle message reactions (TODO: Implement persistence)
+  const handleReact = (messageId: number) => {
+    console.log("React to message:", messageId);
+  };
 
   // Show loading state while store is initializing
   if (!initialized) {
@@ -136,41 +74,6 @@ export function ChatContainer() {
       </div>
     );
   }
-
-  const { handleEdit } = useChat();
-  const latestMessageContent = messages[messages.length - 1]?.content || "";
-
-  // Handle auto-scrolling behavior
-  useEffect(() => {
-    if (!shouldAutoScroll) return;
-
-    if (isStreaming) {
-      // Smooth scroll during streaming
-      scrollToBottom(messageListRef.current, true);
-    } else {
-      const isLatestMessageFromUser =
-        messages[messages.length - 1]?.role === "user";
-      const wasStreaming =
-        messages[messages.length - 1]?.status === "streaming";
-
-      // Add delay for assistant messages that were previously streaming
-      if (!isLatestMessageFromUser && wasStreaming) {
-        setTimeout(() => {
-          scrollToBottom(messageListRef.current, true);
-        }, 100);
-      } else {
-        scrollToBottom(messageListRef.current, !isLatestMessageFromUser);
-      }
-    }
-  }, [messages.length, latestMessageContent, isStreaming, shouldAutoScroll]);
-
-  /**
-   * Handles message reactions (TODO: Implement persistence)
-   * @param messageId - ID of the message being reacted to
-   */
-  const handleReact = (messageId: number) => {
-    console.log("React to message:", messageId);
-  };
 
   return (
     <ErrorBoundary>
