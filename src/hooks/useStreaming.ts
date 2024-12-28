@@ -1,30 +1,38 @@
-import { useRef, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { listen } from "@tauri-apps/api/event";
 
-// Global ref to track streaming state without triggering re-renders
-let isStreamingRef = false;
-
 export function useStreaming() {
-  const initialized = useRef(false);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
+    // Listen for stream start events
+    const unlistenStart = listen("stream-start", () => {
+      setIsStreaming(true);
+    });
 
-    // Set up event listeners that don't trigger re-renders
-    const unlisten = listen("stream-complete", () => {
-      isStreamingRef = false;
+    // Listen for stream progress events
+    const unlistenProgress = listen("stream-progress", () => {
+      setIsStreaming(true);
+    });
+
+    // Listen for stream complete events
+    const unlistenComplete = listen("stream-complete", () => {
+      setIsStreaming(false);
     });
 
     return () => {
-      unlisten.then(fn => fn());
+      unlistenStart.then(fn => fn());
+      unlistenProgress.then(fn => fn());
+      unlistenComplete.then(fn => fn());
     };
   }, []);
 
+  const updateStreaming = useCallback((value: boolean) => {
+    setIsStreaming(value);
+  }, []);
+
   return {
-    setStreaming: (value: boolean) => {
-      isStreamingRef = value;
-    },
-    isStreaming: () => isStreamingRef
+    isStreaming,
+    setStreaming: updateStreaming
   };
 }

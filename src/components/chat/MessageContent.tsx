@@ -4,10 +4,9 @@
  * file attachments, and reactions.
  */
 
-import React, { useMemo, useEffect, useState } from "react";
+import React, { useMemo } from "react";
 import { ThumbsUp, Download } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { useStreamEvents } from "../../hooks/useStreamEvents";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
@@ -15,13 +14,13 @@ import { useZustandTheme } from "../../store";
 import { Message, FileAttachment, ContentBlock } from "../../types";
 import { CodeBlock } from "./CodeBlock";
 import { formatMessageRole } from "./utils";
-import { logger } from "../../utils/logger";
+import { useStreaming } from "../../hooks/useStreaming";
 
 /**
  * Props for the MessageContent component
  * @interface MessageContentProps
  * @property {Message} message - The message object to display
- * @property {boolean} isStreaming - Optional flag indicating if content is being streamed
+ * @property {boolean} isStreaming - Whether content is being streamed
  */
 interface MessageContentProps {
   message: Message;
@@ -108,14 +107,8 @@ const formatMessageContent = (content: string | ContentBlock[]): string => {
  */
 export const MessageContent: React.FC<MessageContentProps> = ({
   message,
-  isStreaming: initialStreaming = false,
+  isStreaming = false,
 }) => {
-  const [isStreaming, setIsStreaming] = useState(initialStreaming);
-
-  useStreamEvents(() => {
-    setIsStreaming(false);
-  });
-
   const { theme } = useZustandTheme();
   const isAssistant = message.role === "assistant";
 

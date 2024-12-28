@@ -15,10 +15,16 @@ export const useCodeEditor = (initialValue: string, isStreaming: boolean) => {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Update code when streaming new content
+  // Update code immediately for streaming changes
   useEffect(() => {
     if (isStreaming) {
+      // During streaming, update immediately
       setCode(initialValue);
+    } else {
+      // After streaming, ensure we have the final value
+      requestAnimationFrame(() => {
+        setCode(initialValue);
+      });
     }
   }, [initialValue, isStreaming]);
 

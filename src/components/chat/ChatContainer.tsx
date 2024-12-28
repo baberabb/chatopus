@@ -43,8 +43,7 @@ const StreamingInput: React.FC<StreamingInputProps> = ({
   onSend,
   onCancel,
 }) => {
-  const streaming = useStreaming();
-  const isStreaming = streaming.isStreaming();
+  const { isStreaming } = useStreaming();
   return (
     <InputArea
       onSend={onSend}
@@ -76,8 +75,7 @@ interface StreamingMessageProps {
  */
 const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
   ({ message, onReact, onEdit, conversationId }) => {
-    const streaming = useStreaming();
-    const isStreaming = streaming.isStreaming();
+    const { isStreaming } = useStreaming();
     return (
       <MessageBlock
         message={message}
@@ -99,8 +97,7 @@ export function ChatContainer() {
   const { theme } = useZustandTheme();
   const { currentModel } = useModel();
   const messageListRef = useRef<HTMLDivElement>(null);
-  const streaming = useStreaming();
-  const isStreaming = streaming.isStreaming();
+  const { isStreaming } = useStreaming();
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
 
   // Handle scroll events to determine auto-scroll behavior

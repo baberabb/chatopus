@@ -215,6 +215,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
                 margin: 0,
                 cursor: "text",
               }}
+              key={displayCode} // Force re-render on content change
             >
               {displayCode}
             </SyntaxHighlighter>
