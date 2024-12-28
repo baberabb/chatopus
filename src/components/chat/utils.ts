@@ -67,7 +67,7 @@ export const findMessageById = (messages: Message[], id: number) => {
  */
 export const createTempMessage = (content: string, role: "user" | "assistant", model?: string): Message => {
   return {
-    id: `temp-${role}-${Date.now()}`,
+    id: Date.now(),
     content,
     role,
     model,
@@ -75,6 +75,12 @@ export const createTempMessage = (content: string, role: "user" | "assistant", m
     reactions: { thumbsUp: 0 },
   };
 };
+
+import gsap from 'gsap';
+import ScrollToPlugin from 'gsap/ScrollToPlugin';
+
+// Register ScrollToPlugin with GSAP
+gsap.registerPlugin(ScrollToPlugin);
 
 /**
  * Helper function to scroll chat container to bottom
@@ -85,8 +91,14 @@ export const scrollToBottom = (container: HTMLElement | null, smooth: boolean = 
   if (!container) return;
   
   const scrollHeight = container.scrollHeight;
-  container.scrollTo({
-    top: scrollHeight,
-    behavior: smooth ? 'smooth' : 'auto' as ScrollBehavior
-  });
+  
+  if (smooth) {
+    gsap.to(container, {
+      duration: 0.5,
+      scrollTo: { y: scrollHeight, autoKill: true },
+      ease: "power2.out"
+    });
+  } else {
+    container.scrollTop = scrollHeight;
+  }
 };
