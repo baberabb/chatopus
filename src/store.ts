@@ -2,16 +2,11 @@ import { create } from "zustand";
 import { initializeStore, themes } from './store/initStore';
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { createGuard, StateGuard } from "./store/guards";
 import { logger } from "./utils/logger";
 import {
   createOptimisticMessage,
   createOptimisticAssistantMessage,
-  updateMessageId,
-  rollbackMessage,
   isOptimisticMessage,
-  updateMessageContent,
-  updateMessageStatus
 } from "./store/optimistic";
 import {
   ChatState,
@@ -21,7 +16,6 @@ import {
   Conversation,
   Theme,
   ThemeType,
-  ModelConfig,
   ProviderSettings,
   ProviderType
 } from "./types";
@@ -73,14 +67,14 @@ listen("stream-complete", () => {
 });
 
 // Selectors for granular state updates
-const messageSelector = (state: ChatState) => state.messages;
-const conversationSelector = (state: ChatState) => ({
-  conversations: state.conversations,
-  currentConversationId: state.currentConversationId
-});
-const systemMessageSelector = (state: ChatState) => state.systemMessage;
-const errorSelector = (state: ChatState) => state.error;
-const loadingSelector = (state: ChatState) => state.isLoading;
+// const messageSelector = (state: ChatState) => state.messages;
+// const conversationSelector = (state: ChatState) => ({
+//   conversations: state.conversations,
+//   currentConversationId: state.currentConversationId
+// });
+// const systemMessageSelector = (state: ChatState) => state.systemMessage;
+// const errorSelector = (state: ChatState) => state.error;
+// const loadingSelector = (state: ChatState) => state.isLoading;
 
 // Split store into smaller stores for more granular updates
 export const useChatStore = create<ChatState>((set, get) => ({

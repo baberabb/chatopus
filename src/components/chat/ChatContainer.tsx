@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useZustandTheme, useChatStore } from "../../store";
 import { useStreaming } from "../../hooks/useStreaming";
-import { Message, FileAttachment, Conversation, ChatState } from "../../types";
+import { Message, FileAttachment } from "../../types";
 import { useModel } from "../../contexts/ModelContext";
 import ErrorBoundary from "../ErrorBoundary";
 import { SystemMessageEditor } from "./SystemMessageEditor";
@@ -10,7 +10,6 @@ import { ErrorDisplay } from "../ErrorDisplay";
 import { MessageBlock } from "./MessageBlock";
 import { useChat } from "./useChat";
 import { JupyterConnect } from "../JupyterConnect";
-import { logger } from "../../utils/logger";
 import { scrollToBottom } from "./utils";
 
 interface StreamingInputProps {
@@ -43,24 +42,22 @@ interface StreamingMessageProps {
 }
 
 // Separate component that handles streaming state
-const StreamingMessage: React.FC<StreamingMessageProps> = ({
-  message,
-  onReact,
-  onEdit,
-  conversationId,
-}) => {
-  const streaming = useStreaming();
-  const isStreaming = streaming.isStreaming();
-  return (
-    <MessageBlock
-      message={message}
-      onReact={onReact}
-      onEdit={onEdit}
-      conversationId={conversationId}
-      isStreaming={message.status === "streaming" && isStreaming}
-    />
-  );
-};
+const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
+    ({ message, onReact, onEdit, conversationId }) => {
+      const streaming = useStreaming();
+      const isStreaming = streaming.isStreaming();
+      return (
+          <MessageBlock
+              message={message}
+              onReact={onReact}
+              onEdit={onEdit}
+              conversationId={conversationId}
+              isStreaming={message.status === "streaming" && isStreaming}
+          />
+      );
+    },
+    (prevProps, nextProps) => prevProps.message === nextProps.message
+);
 
 export function ChatContainer() {
   const { theme } = useZustandTheme();
@@ -90,13 +87,11 @@ export function ChatContainer() {
   const store = useChatStore();
   const {
     messages,
-    conversations,
     currentConversationId,
     isLoading,
     error,
     initialized,
     sendMessage,
-    updateConversation,
     cancelMessage,
   } = store;
 

@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useChatStore } from "../../store";
-import { Message, ChatState } from "../../types";
 import { findMessageById } from "./utils";
 
 export function useChat() {
@@ -44,7 +43,7 @@ export function useChat() {
   }
 
   // Get streaming state from last message
-  const isStreaming = messages[messages.length - 1]?.status === 'streaming';
+  // const isStreaming = messages[messages.length - 1]?.status === 'streaming';
 
   // Local UI state
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);

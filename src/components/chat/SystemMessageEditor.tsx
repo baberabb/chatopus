@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -23,17 +23,17 @@ interface SystemMessageEditorProps {
 export function SystemMessageEditor({ disabled }: SystemMessageEditorProps) {
   const { theme } = useZustandTheme();
   const systemMessage = useSystemMessage();
-  const isLoading = useChatLoading();
   const initialized = useChatStore(selectInitialized);
   const currentConversationId = useChatStore(selectCurrentConversationId);
   const updateConversation = useChatStore(selectUpdateConversation);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(systemMessage || "");
 
   // Return null if store is not initialized
   if (!initialized) {
     return null;
   }
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(systemMessage || "");
 
   const handleSave = () => {
     if (currentConversationId) {

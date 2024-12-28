@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useZustandTheme } from "../../store";
 import { Message } from "./types";
 import { UserAvatar } from "./UserAvatar";
 import { MessageContent } from "./MessageContent";
 import { MessageActions } from "./MessageActions";
 import { MessageEditor } from "./MessageEditor";
-import { logger } from "../../utils/logger";
 
 interface MessageBlockProps {
   message: Message;
@@ -19,7 +18,6 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
   message,
   onReact,
   onEdit,
-  conversationId,
   isStreaming = false,
 }) => {
   const { theme } = useZustandTheme();
