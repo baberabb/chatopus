@@ -10,8 +10,9 @@
  * - Displays system messages and error states
  */
 
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useZustandTheme, useChatStore } from "../../store";
+import { ChevronDown } from "lucide-react";
 import { useStreaming } from "../../hooks/useStreaming";
 import { Message, FileAttachment } from "../../types";
 import { useModel } from "../../contexts/ModelContext";
@@ -99,6 +100,7 @@ export function ChatContainer() {
   const messageListRef = useRef<HTMLDivElement>(null);
   const { isStreaming } = useStreaming();
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Handle scroll events to determine auto-scroll behavior
   useEffect(() => {
@@ -110,6 +112,7 @@ export function ChatContainer() {
         container.scrollHeight - container.scrollTop <=
         container.clientHeight + 100;
       setShouldAutoScroll(isAtBottom);
+      setShowScrollButton(!isAtBottom);
     };
 
     container.addEventListener("scroll", handleScroll);
@@ -249,6 +252,17 @@ export function ChatContainer() {
         </div>
 
         <StreamingInput onSend={sendMessage} onCancel={cancelMessage} />
+
+        {/* Scroll to bottom button */}
+        {showScrollButton && (
+          <button
+            onClick={() => scrollToBottom(messageListRef.current, true)}
+            className="fixed bottom-24 right-8 p-2 rounded-full bg-gray-800 text-white shadow-lg hover:bg-gray-700 transition-colors"
+            aria-label="Scroll to bottom"
+          >
+            <ChevronDown className="w-5 h-5" />
+          </button>
+        )}
       </div>
     </ErrorBoundary>
   );
