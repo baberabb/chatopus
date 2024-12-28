@@ -54,12 +54,12 @@ export function ChatContainer() {
 
   const { handleEdit } = useChat();
 
-  // Initialize auto-scroll behavior
-  useAutoScroll({
-    containerRef: messageListRef,
-    messages,
-    isStreaming,
-  });
+  // // Initialize auto-scroll behavior
+  // useAutoScroll({
+  //   containerRef: messageListRef,
+  //   messages,
+  //   isStreaming,
+  // });
 
   // Handle message reactions (TODO: Implement persistence)
   const handleReact = (messageId: number) => {
