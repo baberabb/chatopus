@@ -66,8 +66,26 @@ export const ModelProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // Subscribe to provider changes
   useEffect(() => {
+    const checkProviderChanges = async () => {
+      const config = await invoke<any>("get_config");
+      const activeProvider = config.active_provider;
+      void loadSavedModels();
+    };
+
+    // Set up event listener for provider changes
+    const unsubscribe = window.addEventListener(
+      "provider-changed",
+      checkProviderChanges
+    );
+
+    // Initial load
     void loadSavedModels();
+
+    return () => {
+      window.removeEventListener("provider-changed", checkProviderChanges);
+    };
   }, []);
 
   return (

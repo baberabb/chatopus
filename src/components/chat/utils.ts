@@ -52,7 +52,8 @@ export const getCurrentTime = () => {
  * Helper function to format message role display
  */
 export const formatMessageRole = (role: string, model?: string) => {
-  return role === "user" ? "You" : model || "Assistant";
+  if (role === "user") return "You";
+  return model || "AI"; // Use "AI" as fallback instead of "Assistant"
 };
 
 /**

@@ -96,9 +96,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // Message actions
   sendMessage: async (content: string, attachments?: FileAttachment[]) => {
     try {
+      // Get current model from model store
+      const modelStore = useModelStore.getState();
+      const config = modelStore.config;
+      const currentModel = config?.providers[config.active_provider]?.model;
+
       // Create optimistic messages
       const userMessage = createOptimisticMessage(content, 'user', 'complete', attachments);
-      const assistantMessage = createOptimisticAssistantMessage();
+      const assistantMessage = createOptimisticAssistantMessage(currentModel);
 
       // Update UI immediately with new messages
       set(state => ({

@@ -25,13 +25,14 @@ export const createOptimisticMessage = (
 });
 
 // Create optimistic assistant message
-export const createOptimisticAssistantMessage = (): Message => {
+export const createOptimisticAssistantMessage = (model?: string): Message => {
   const message: Message = {
     id: createTempId(),
     role: 'assistant',
     content: '',
     timestamp: new Date().toISOString(),
-    status: 'streaming'
+    status: 'streaming',
+    model
   };
   
   // Log optimistic message creation

@@ -68,6 +68,7 @@ interface StreamingMessageProps {
   onReact: (messageId: number) => void;
   onEdit: (messageId: number, content: string) => Promise<void>;
   conversationId: number | null;
+  modelName?: string;
 }
 
 /**
@@ -75,7 +76,7 @@ interface StreamingMessageProps {
  * @component
  */
 const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
-  ({ message, onReact, onEdit, conversationId }) => {
+  ({ message, onReact, onEdit, conversationId, modelName }) => {
     const { isStreaming } = useStreaming();
     return (
       <MessageBlock
@@ -84,6 +85,7 @@ const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
         onEdit={onEdit}
         conversationId={conversationId}
         isStreaming={message.status === "streaming" && isStreaming}
+        modelName={modelName}
       />
     );
   },
@@ -226,6 +228,7 @@ export function ChatContainer() {
                 onReact={handleReact}
                 onEdit={handleEdit}
                 conversationId={currentConversationId}
+                modelName={currentModel?.name}
               />
             ))
           )}

@@ -55,6 +55,11 @@ export function useProviderSettings() {
         [provider]: newSettings,
       }));
       setError(null);
+
+      // If the model was changed and this is the active provider, dispatch provider-changed event
+      if (key === 'model' && provider === activeProvider) {
+        window.dispatchEvent(new Event('provider-changed'));
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update settings';
       setError(errorMessage);
@@ -67,6 +72,9 @@ export function useProviderSettings() {
       await invoke("set_active_provider", { provider });
       setActiveProvider(provider);
       setError(null);
+      
+      // Dispatch provider-changed event
+      window.dispatchEvent(new Event('provider-changed'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to set provider');
       throw err;
