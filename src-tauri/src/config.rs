@@ -356,9 +356,21 @@ pub async fn set_active_provider(
     }
 
     // Get the provider settings
-    let settings = config_guard.providers.get(&provider).unwrap();
+    let settings = config_guard.providers.get(&provider).unwrap().clone();
 
-    // Update the provider in the registry with new settings
+    // Update active provider first to ensure config is consistent
+    config_guard.active_provider = provider.clone();
+
+    // Save to store before updating registry to ensure config is persisted
+    store.set("config", json!(config_guard.clone()));
+    if let Err(e) = store.save() {
+        return Err(format!("Failed to persist active provider: {}", e));
+    }
+
+    // Drop the config guard to avoid potential deadlocks
+    drop(config_guard);
+
+    // Update the provider in the registry with settings
     let registry = crate::apimodels::get_provider_registry();
     let mut builder =
         crate::apimodels::core::provider::ProviderBuilder::new(&provider, &settings.api_key)
@@ -384,7 +396,7 @@ pub async fn set_active_provider(
         builder = builder.with_custom_parameters(custom_params.clone());
     }
 
-    // Add default parameters
+    // Add parameters
     builder = builder.with_parameters(settings.parameters.clone());
 
     // Update or create the provider in the registry
@@ -393,13 +405,5 @@ pub async fn set_active_provider(
     }
 
     println!("Successfully updated provider: {}", provider);
-
-    config_guard.active_provider = provider;
-
-    // Save to store
-    store.set("config", json!(config_guard.clone()));
-    if let Err(e) = store.save() {
-        return Err(format!("Failed to persist active provider: {}", e));
-    }
     Ok(())
 }

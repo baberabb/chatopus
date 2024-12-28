@@ -120,7 +120,14 @@ const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
  */
 const formatMessageContent = (content: string | ContentBlock[]): string => {
   if (typeof content === "string") return content;
-  return content.map((block) => block.text || "").join("\n");
+  return content
+    .map((block) => {
+      if (block.image_url) {
+        return `![${block.text || "Image"}](${block.image_url})`;
+      }
+      return block.text || "";
+    })
+    .join("\n");
 };
 
 /**
@@ -138,6 +145,23 @@ export const MessageContent: React.FC<MessageContentProps> = ({
   // Markdown component configuration
   const markdownComponents = useMemo(
     () => ({
+      img: ({
+        src,
+        alt,
+        ...props
+      }: {
+        src: string;
+        alt: string;
+        [key: string]: any;
+      }) => (
+        <img
+          src={src}
+          alt={alt}
+          className="max-w-full h-auto rounded-lg my-2"
+          style={{ maxHeight: "512px" }}
+          {...props}
+        />
+      ),
       code: ({
         className,
         children,

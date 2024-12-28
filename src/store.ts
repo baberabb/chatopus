@@ -18,7 +18,8 @@ import {
   Theme,
   ThemeType,
   ProviderSettings,
-  ProviderType
+  ProviderType,
+  FileAttachment
 } from "./types";
 
 // Handle stream events
@@ -93,10 +94,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   systemMessage: null as string | null,
 
   // Message actions
-  sendMessage: async (content: string) => {
+  sendMessage: async (content: string, attachments?: FileAttachment[]) => {
     try {
       // Create optimistic messages
-      const userMessage = createOptimisticMessage(content, 'user');
+      const userMessage = createOptimisticMessage(content, 'user', 'complete', attachments);
       const assistantMessage = createOptimisticAssistantMessage();
 
       // Update UI immediately with new messages
@@ -109,7 +110,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const response = await invoke<{ reply: string, user_message_id: number, assistant_message_id: number, conversation_id: number }>('process_message', { 
         request: {
           message: content,
-          conversation_id: get().currentConversationId
+          conversation_id: get().currentConversationId,
+          attachments: attachments || []
         }
       });
 

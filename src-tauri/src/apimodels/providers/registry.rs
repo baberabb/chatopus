@@ -52,15 +52,25 @@ impl ProviderRegistry {
             .get(name)
             .ok_or_else(|| Error::InvalidRequest(format!("Unknown provider type: {}", name)))?;
 
-        let provider = factory(builder)?;
+        // Create new provider instance with the provided settings
+        let provider = factory(builder.clone())?;
 
-        // Update or insert the provider instance
+        // Update the instance in the registry
         {
             let mut instances = self.instances.write().map_err(|_| {
                 Error::ServerError("Failed to acquire write lock on provider instances".into())
             })?;
+
+            // Remove existing instance if any
+            if instances.contains_key(name) {
+                println!("Removing existing provider instance: {}", name);
+                instances.remove(name);
+            }
+
+            // Insert new instance
             instances.insert(name.to_string(), provider.clone());
             println!("Provider updated and cached: {}", name);
+            println!("Current provider settings: {:?}", provider.capabilities());
             println!(
                 "Cached providers: {:?}",
                 instances.keys().collect::<Vec<_>>()

@@ -12,7 +12,7 @@ use crate::apimodels::core::{
     types::{ChatResponse, ContentBlock, Message, TokenUsage},
 };
 
-const DEFAULT_API_VERSION: &str = "2024-02-15";
+const DEFAULT_API_VERSION: &str = "2020-11-07";
 const API_ENDPOINT: &str = "https://api.openai.com/v1/chat/completions";
 
 #[derive(Debug, Deserialize)]
