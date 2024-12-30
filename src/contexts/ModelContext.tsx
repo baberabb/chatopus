@@ -77,7 +77,7 @@ export const ModelProvider: React.FC<{ children: React.ReactNode }> = ({
     // Set up event listener for provider changes
     const unsubscribe = window.addEventListener(
       "provider-changed",
-      checkProviderChanges
+      checkProviderChanges,
     );
 
     // Initial load

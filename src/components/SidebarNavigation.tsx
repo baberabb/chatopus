@@ -94,7 +94,7 @@ export function SidebarNavigation({
                   setActiveItem(item);
                   setOpen(true);
                   setActiveContent(
-                    item.content as "inbox" | "trash" | "settings" | "model"
+                    item.content as "inbox" | "trash" | "settings" | "model",
                   );
                 }}
                 isActive={activeItem.title === item.title}

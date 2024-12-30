@@ -33,7 +33,7 @@ export function ModelSettings() {
         };
         return acc;
       },
-      {} as Record<string, ProviderSettings>
+      {} as Record<string, ProviderSettings>,
     );
   }, [settings]);
 
@@ -55,12 +55,12 @@ export function ModelSettings() {
           updateProviderSetting(
             provider,
             "customParameters",
-            updatedSettings.customParameters
+            updatedSettings.customParameters,
           );
         }
       },
-      [safeSettings, updateProviderSetting]
-    )
+      [safeSettings, updateProviderSetting],
+    ),
   );
 
   if (loading) {
@@ -89,12 +89,12 @@ export function ModelSettings() {
         updateProviderSetting(
           provider,
           "parameters",
-          providerSettings.parameters
+          providerSettings.parameters,
         ),
         updateProviderSetting(
           provider,
           "customParameters",
-          providerSettings.customParameters
+          providerSettings.customParameters,
         ),
       ]);
       await reloadConfig();

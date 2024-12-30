@@ -27,7 +27,7 @@ interface ProviderCardProps {
   onSelect: () => void;
   onSettingChange: <K extends keyof ProviderSettings>(
     key: K,
-    value: ProviderSettings[K]
+    value: ProviderSettings[K],
   ) => void;
   onSave: () => void;
 }

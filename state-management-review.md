@@ -124,10 +124,10 @@ sendMessage: async (content: string) => {
         updateMessageId(
           state.messages,
           userMessage.id,
-          response.message_id + "_user"
+          response.message_id + "_user",
         ),
         assistantMessage.id,
-        response.message_id
+        response.message_id,
       ),
     }));
 

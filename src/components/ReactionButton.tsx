@@ -1,13 +1,16 @@
-import React from 'react'
-import { ThumbsUp } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import React from "react";
+import { ThumbsUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ReactionButtonProps {
   onClick: () => void;
   className?: string;
 }
 
-export const ReactionButton: React.FC<ReactionButtonProps> = ({ onClick, className }) => {
+export const ReactionButton: React.FC<ReactionButtonProps> = ({
+  onClick,
+  className,
+}) => {
   return (
     <Button
       variant="ghost"
@@ -20,4 +23,3 @@ export const ReactionButton: React.FC<ReactionButtonProps> = ({ onClick, classNa
     </Button>
   );
 };
-

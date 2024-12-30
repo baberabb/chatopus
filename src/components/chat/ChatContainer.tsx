@@ -89,7 +89,7 @@ const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
       />
     );
   },
-  (prevProps, nextProps) => prevProps.message === nextProps.message
+  (prevProps, nextProps) => prevProps.message === nextProps.message,
 );
 
 /**
@@ -121,9 +121,18 @@ export function ChatContainer() {
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const { handleEdit, messages,currentConversationId,isLoading,error,sendMessage,cancelMessage } = useChat();
+  const {
+    handleEdit,
+    messages,
+    currentConversationId,
+    isLoading,
+    error,
+    sendMessage,
+    cancelMessage,
+  } = useChat();
   const latestMessageContent = messages[messages.length - 1]?.content || "";
-  const isLatestMessageFromUser = messages[messages.length - 1]?.role === "user";
+  const isLatestMessageFromUser =
+    messages[messages.length - 1]?.role === "user";
   const wasStreaming = messages[messages.length - 1]?.status === "streaming";
 
   // Handle auto-scrolling behavior
@@ -134,7 +143,6 @@ export function ChatContainer() {
       // Smooth scroll during streaming
       scrollToBottom(messageListRef.current, true);
     } else {
-
       // Add delay for assistant messages that were previously streaming
       if (!isLatestMessageFromUser && wasStreaming) {
         setTimeout(() => {
@@ -144,7 +152,14 @@ export function ChatContainer() {
         scrollToBottom(messageListRef.current, !isLatestMessageFromUser);
       }
     }
-  }, [messages.length, latestMessageContent, isStreaming, shouldAutoScroll, isLatestMessageFromUser, wasStreaming]);
+  }, [
+    messages.length,
+    latestMessageContent,
+    isStreaming,
+    shouldAutoScroll,
+    isLatestMessageFromUser,
+    wasStreaming,
+  ]);
 
   /**
    * Handles message reactions (TODO: Implement persistence)

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { initializeStore, themes } from './store/initStore';
+import { initializeStore, themes } from "./store/initStore";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { logger } from "./utils/logger";
@@ -14,14 +14,17 @@ import {
   ThemeType,
   ProviderSettings,
   ProviderType,
-  FileAttachment
+  FileAttachment,
 } from "./types";
 
 // Handle stream events
 listen("stream-response", (event) => {
   const chunk = event.payload as string;
-  const lastMessage = useChatStore.getState().messages[useChatStore.getState().messages.length - 1];
-  if (lastMessage?.status === 'streaming') {
+  const lastMessage =
+    useChatStore.getState().messages[
+      useChatStore.getState().messages.length - 1
+    ];
+  if (lastMessage?.status === "streaming") {
     useChatStore.getState().appendStreamChunk(chunk);
   }
 });
@@ -31,34 +34,34 @@ listen("stream-complete", () => {
   const messages = useChatStore.getState().messages;
   const lastIndex = messages.length - 1;
   const lastMessage = messages[lastIndex];
-  
-  if (lastMessage?.status === 'streaming') {
-    logger.state('Store', {
-      action: 'completeStream',
+
+  if (lastMessage?.status === "streaming") {
+    logger.state("Store", {
+      action: "completeStream",
       messageId: lastMessage.id,
       before: {
-        messageStatus: lastMessage.status
-      }
+        messageStatus: lastMessage.status,
+      },
     });
 
     // Only create new object for the last message
     const updatedMessage = {
       ...lastMessage,
-      status: 'complete' as const
+      status: "complete" as const,
     };
 
     // Create new array with same references except last message
     const updatedMessages = [...messages];
     updatedMessages[lastIndex] = updatedMessage;
 
-    useChatStore.setState({ messages: updatedMessages, isStreaming: false});
+    useChatStore.setState({ messages: updatedMessages, isStreaming: false });
 
-    logger.state('Store', {
-      action: 'completeStream',
+    logger.state("Store", {
+      action: "completeStream",
       messageId: lastMessage.id,
       after: {
-        messageStatus: updatedMessage.status
-      }
+        messageStatus: updatedMessage.status,
+      },
     });
   }
 });
@@ -104,11 +107,11 @@ function isOptimisticMessage(id: number) {
  * Creates a generic optimistic message, used for both user and assistant.
  */
 function createOptimisticMessage(
-    content: string,
-    role: Message['role'],
-    status: Message['status'] = 'complete',
-    attachments?: FileAttachment[],
-    model?: string
+  content: string,
+  role: Message["role"],
+  status: Message["status"] = "complete",
+  attachments?: FileAttachment[],
+  model?: string,
 ): Message {
   return {
     id: generateTempId(),
@@ -117,7 +120,7 @@ function createOptimisticMessage(
     timestamp: new Date().toISOString(),
     status,
     attachments,
-    ...(model ? { model } : {})
+    ...(model ? { model } : {}),
   };
 }
 
@@ -131,7 +134,7 @@ interface ChatState {
   error: string | null;
   isLoading: boolean;
   initialized: boolean;
-  isStreaming: boolean,
+  isStreaming: boolean;
 
   // Conversation metadata
   conversations: Conversation[];
@@ -141,7 +144,10 @@ interface ChatState {
   systemMessage: string | null;
 
   // Message actions
-  sendMessage: (content: string, attachments?: FileAttachment[]) => Promise<void>;
+  sendMessage: (
+    content: string,
+    attachments?: FileAttachment[],
+  ) => Promise<void>;
   appendStreamChunk: (chunk: string) => void;
   setMessages: (messages: Message[]) => void;
   updateLastMessage: (content: string) => void;
@@ -153,7 +159,10 @@ interface ChatState {
   loadConversation: (id: number) => Promise<void>;
   setCurrentConversationId: (id: number | null) => Promise<void>;
   createConversation: () => Promise<number>;
-  updateConversation: (id: number, updates: Partial<Conversation>) => Promise<void>;
+  updateConversation: (
+    id: number,
+    updates: Partial<Conversation>,
+  ) => Promise<void>;
   deleteConversation: (id: number) => Promise<void>;
 }
 
@@ -182,15 +191,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const providerConfig = config?.providers[config.active_provider];
       const currentModel = providerConfig?.model;
 
-
       // Create two optimistic messages: user + assistant
-      const userMessage = createOptimisticMessage(content, 'user', 'complete', attachments);
-      const assistantMessage = createOptimisticMessage('', 'assistant', 'streaming', undefined, currentModel);
+      const userMessage = createOptimisticMessage(
+        content,
+        "user",
+        "complete",
+        attachments,
+      );
+      const assistantMessage = createOptimisticMessage(
+        "",
+        "assistant",
+        "streaming",
+        undefined,
+        currentModel,
+      );
 
       // Immediately update the UI with optimistic messages
       set((state) => ({
         messages: [...state.messages, userMessage, assistantMessage],
-        error: null
+        error: null,
       }));
 
       // Send message to backend
@@ -199,12 +218,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         user_message_id: number;
         assistant_message_id: number;
         conversation_id: number;
-      }>('process_message', {
+      }>("process_message", {
         request: {
           message: content,
           conversation_id: get().currentConversationId,
-          attachments: attachments || []
-        }
+          attachments: attachments || [],
+        },
       });
 
       // Update real IDs for both optimistic messages
@@ -220,17 +239,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
         return {
           messages: updatedMessages,
-          currentConversationId: response.conversation_id
+          currentConversationId: response.conversation_id,
         };
       });
     } catch (error) {
-      const errorDetails = error instanceof Error ? error.message : JSON.stringify(error);
-      console.error('Send message error:', errorDetails);
+      const errorDetails =
+        error instanceof Error ? error.message : JSON.stringify(error);
+      console.error("Send message error:", errorDetails);
 
       // Rollback optimistic messages
       set((state) => ({
         messages: state.messages.filter((msg) => !isOptimisticMessage(msg.id)),
-        error: errorDetails
+        error: errorDetails,
       }));
     }
   },
@@ -240,19 +260,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const lastIndex = messages.length - 1;
     const lastMessage = messages[lastIndex];
 
-    if (lastMessage?.status === 'streaming') {
-      logger.state('Store', {
-        action: 'appendStreamChunk',
+    if (lastMessage?.status === "streaming") {
+      logger.state("Store", {
+        action: "appendStreamChunk",
         messageId: lastMessage.id,
         before: {
           contentLength: lastMessage.content.length,
-          chunkLength: chunk.length
-        }
+          chunkLength: chunk.length,
+        },
       });
 
       const updatedMessage = {
         ...lastMessage,
-        content: lastMessage.content + chunk
+        content: lastMessage.content + chunk,
       };
 
       const updatedMessages = [...messages];
@@ -260,12 +280,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set({ messages: updatedMessages, isStreaming: true });
 
-      logger.state('Store', {
-        action: 'appendStreamChunk',
+      logger.state("Store", {
+        action: "appendStreamChunk",
         messageId: lastMessage.id,
         after: {
-          contentLength: updatedMessage.content.length
-        }
+          contentLength: updatedMessage.content.length,
+        },
       });
     }
   },
@@ -289,45 +309,46 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({
       messages: [],
       error: null,
-      systemMessage: null
+      systemMessage: null,
     });
   },
 
   cancelMessage: async () => {
     try {
-      await invoke('cancel_message');
+      await invoke("cancel_message");
       set({ isStreaming: false });
       const messages = get().messages;
       const lastIndex = messages.length - 1;
       const lastMessage = messages[lastIndex];
 
-      if (lastMessage?.status === 'streaming') {
-        logger.state('Store', {
-          action: 'cancelMessage',
+      if (lastMessage?.status === "streaming") {
+        logger.state("Store", {
+          action: "cancelMessage",
           messageId: lastMessage.id,
           before: {
-            messageStatus: lastMessage.status
-          }
+            messageStatus: lastMessage.status,
+          },
         });
 
-        const updatedMessage = { ...lastMessage, status: 'error' as const };
+        const updatedMessage = { ...lastMessage, status: "error" as const };
         const updatedMessages = [...messages];
         updatedMessages[lastIndex] = updatedMessage;
 
         set({ messages: updatedMessages });
 
-        logger.state('Store', {
-          action: 'cancelMessage',
+        logger.state("Store", {
+          action: "cancelMessage",
           messageId: lastMessage.id,
           after: {
-            messageStatus: updatedMessage.status
-          }
+            messageStatus: updatedMessage.status,
+          },
         });
       }
     } catch (error) {
       set({ isStreaming: false });
-      const errorDetails = error instanceof Error ? error.message : JSON.stringify(error);
-      console.error('Failed to cancel message:', errorDetails);
+      const errorDetails =
+        error instanceof Error ? error.message : JSON.stringify(error);
+      console.error("Failed to cancel message:", errorDetails);
       set({ error: errorDetails });
     }
   },
@@ -338,23 +359,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadConversations: async () => {
     set({ isLoading: true, error: null });
     try {
-      const conversations = await invoke<Conversation[]>('get_conversations');
+      const conversations = await invoke<Conversation[]>("get_conversations");
       conversations.sort(
-          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
       );
       set({
         conversations,
         isLoading: false,
-        error: null
+        error: null,
       });
     } catch (error) {
       const errorMessage =
-          error instanceof Error ? error.message : 'Failed to load conversations';
-      console.error('Load conversations error:', errorMessage);
+        error instanceof Error ? error.message : "Failed to load conversations";
+      console.error("Load conversations error:", errorMessage);
       set({
         error: errorMessage,
         isLoading: false,
-        conversations: []
+        conversations: [],
       });
       throw error;
     }
@@ -367,13 +389,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const { conversations } = get();
       const conversationExists = conversations.some((c) => c.id === id);
       if (!conversationExists) {
-        throw new Error('Conversation not found');
+        throw new Error("Conversation not found");
       }
 
       // Load messages + conversation concurrently
       const [messages, conversation] = await Promise.all([
-        invoke<Message[]>('load_conversation_messages', { conversationId: id }),
-        invoke<Conversation>('get_conversation', { id })
+        invoke<Message[]>("load_conversation_messages", { conversationId: id }),
+        invoke<Conversation>("get_conversation", { id }),
       ]);
 
       set({
@@ -381,17 +403,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
         currentConversationId: id,
         systemMessage: conversation.systemMessage || null,
         isLoading: false,
-        error: null
+        error: null,
       });
     } catch (error) {
       const errorMessage =
-          error instanceof Error ? error.message : 'Failed to load conversation';
-      console.error('Load conversation error:', errorMessage);
+        error instanceof Error ? error.message : "Failed to load conversation";
+      console.error("Load conversation error:", errorMessage);
       set({
         error: errorMessage,
         isLoading: false,
         messages: [],
-        systemMessage: null
+        systemMessage: null,
       });
       throw error;
     }
@@ -402,7 +424,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set({
       currentConversationId: id,
-      error: null
+      error: null,
     });
 
     if (id) {
@@ -426,20 +448,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messages: [],
         error: null,
         systemMessage: null,
-        isLoading: true
+        isLoading: true,
       });
 
       // Create new conversation
-      const newId = await invoke<number>('create_new_convos');
-      console.log('New conversation ID:', newId);
+      const newId = await invoke<number>("create_new_convos");
+      console.log("New conversation ID:", newId);
 
       // Reload all conversations so the new one is included
-      const conversations = await invoke<Conversation[]>('get_conversations');
-      console.log('All conversations:', conversations);
+      const conversations = await invoke<Conversation[]>("get_conversations");
+      console.log("All conversations:", conversations);
 
       const newConversation = conversations.find((c) => c.id === newId);
       if (!newConversation) {
-        throw new Error('Failed to find newly created conversation');
+        throw new Error("Failed to find newly created conversation");
       }
 
       set((state) => ({
@@ -448,16 +470,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messages: [],
         systemMessage: null,
         isLoading: false,
-        error: null
+        error: null,
       }));
 
       return newId;
     } catch (error) {
       const errorMsg =
-          error instanceof Error ? error.message : 'Failed to create conversation';
+        error instanceof Error
+          ? error.message
+          : "Failed to create conversation";
       set({
         error: errorMsg,
-        isLoading: false
+        isLoading: false,
       });
       throw error;
     }
@@ -465,23 +489,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   updateConversation: async (id: number, updates: Partial<Conversation>) => {
     try {
-      await invoke('update_conversation', { id, updates });
+      await invoke("update_conversation", { id, updates });
 
       // If systemMessage changed, update local store
-      if ('systemMessage' in updates) {
+      if ("systemMessage" in updates) {
         set({ systemMessage: updates.systemMessage || null });
       }
 
       // Reload conversation list only if metadata changed
       const metadataChanged = Object.keys(updates).some(
-          (key) => key !== 'systemMessage' && key !== 'messages'
+        (key) => key !== "systemMessage" && key !== "messages",
       );
       if (metadataChanged) {
         await get().loadConversations();
       }
     } catch (error) {
       const errorMsg =
-          error instanceof Error ? error.message : 'Failed to update conversation';
+        error instanceof Error
+          ? error.message
+          : "Failed to update conversation";
       set({ error: errorMsg });
     }
   },
@@ -493,13 +519,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         currentConversationId: null,
         messages: [],
         error: null,
-        systemMessage: null
+        systemMessage: null,
       });
     }
 
-    await invoke('delete_conversation', { conversationId: id });
+    await invoke("delete_conversation", { conversationId: id });
     await get().loadConversations();
-  }
+  },
 }));
 
 export const useThemeStore = create<ThemeStore>((set) => ({
@@ -523,10 +549,10 @@ export const useModelStore = create<ModelStore>((set, get) => ({
   initialized: false,
   setConfig: async (config) => {
     try {
-      await invoke('update_config', { newConfig: config });
+      await invoke("update_config", { newConfig: config });
       set({ config });
     } catch (error) {
-      console.error('Failed to update config:', error);
+      console.error("Failed to update config:", error);
       throw error;
     }
   },
@@ -534,22 +560,22 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     try {
       const currentConfig = get().config;
       if (!currentConfig) {
-        throw new Error('Config not initialized');
+        throw new Error("Config not initialized");
       }
 
-      await invoke('update_provider_settings', { provider, settings });
-      
+      await invoke("update_provider_settings", { provider, settings });
+
       set((state) => ({
         config: {
           active_provider: currentConfig.active_provider,
           providers: {
             ...currentConfig.providers,
-            [provider]: settings
-          }
-        }
+            [provider]: settings,
+          },
+        },
       }));
     } catch (error) {
-      console.error('Failed to update provider settings:', error);
+      console.error("Failed to update provider settings:", error);
       throw error;
     }
   },
@@ -557,21 +583,21 @@ export const useModelStore = create<ModelStore>((set, get) => ({
     try {
       const currentConfig = get().config;
       if (!currentConfig) {
-        throw new Error('Config not initialized');
+        throw new Error("Config not initialized");
       }
 
       if (provider === currentConfig.active_provider) return;
-      
-      await invoke('set_active_provider', { provider });
-      
+
+      await invoke("set_active_provider", { provider });
+
       set((state) => ({
         config: {
           active_provider: provider,
-          providers: currentConfig.providers
-        }
+          providers: currentConfig.providers,
+        },
       }));
     } catch (error) {
-      console.error('Failed to set active provider:', error);
+      console.error("Failed to set active provider:", error);
       throw error;
     }
   },
@@ -592,15 +618,15 @@ const applyTheme = (themeType: ThemeType, theme: Theme) => {
 (async () => {
   try {
     // Get initial config from backend
-    const config = await invoke<ModelConfig>('get_config');
+    const config = await invoke<ModelConfig>("get_config");
     useModelStore.setState({ config, initialized: true });
 
     // Initialize theme
     const { theme } = await initializeStore();
-    useThemeStore.setState({ 
-      themeType: theme.type, 
+    useThemeStore.setState({
+      themeType: theme.type,
       theme: theme.values,
-      initialized: true 
+      initialized: true,
     });
     applyTheme(theme.type, theme.values);
 
@@ -608,28 +634,33 @@ const applyTheme = (themeType: ThemeType, theme: Theme) => {
     await useChatStore.getState().loadConversations();
     useChatStore.setState({ initialized: true });
   } catch (error) {
-    console.error('Failed to initialize stores:', error);
+    console.error("Failed to initialize stores:", error);
   }
 })();
 
 // Hooks for accessing specific parts of state
-export const useMessages = () => useChatStore((state: ChatState) => state.messages);
-export const useConversations = () => useChatStore((state: ChatState) => ({
-  conversations: state.conversations,
-  currentConversationId: state.currentConversationId
-}));
-export const useSystemMessage = () => useChatStore((state: ChatState) => state.systemMessage);
-export const useChatError = () => useChatStore((state: ChatState) => state.error);
-export const useChatLoading = () => useChatStore((state: ChatState) => state.isLoading);
+export const useMessages = () =>
+  useChatStore((state: ChatState) => state.messages);
+export const useConversations = () =>
+  useChatStore((state: ChatState) => ({
+    conversations: state.conversations,
+    currentConversationId: state.currentConversationId,
+  }));
+export const useSystemMessage = () =>
+  useChatStore((state: ChatState) => state.systemMessage);
+export const useChatError = () =>
+  useChatStore((state: ChatState) => state.error);
+export const useChatLoading = () =>
+  useChatStore((state: ChatState) => state.isLoading);
 
 export const useZustandTheme = () => {
   const store = useThemeStore();
   if (!store.initialized) {
-    return { 
-      theme: themes.light, 
-      themeType: "light" as const, 
+    return {
+      theme: themes.light,
+      themeType: "light" as const,
       toggleTheme: store.toggleTheme,
-      initialized: false 
+      initialized: false,
     };
   }
   return store;

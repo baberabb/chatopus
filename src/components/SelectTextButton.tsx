@@ -1,13 +1,16 @@
-import React from 'react'
-import { TextSelect } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import React from "react";
+import { TextSelect } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface SelectTextButtonProps {
   onClick: () => void;
   className?: string;
 }
 
-export const SelectTextButton: React.FC<SelectTextButtonProps> = ({ onClick, className }) => {
+export const SelectTextButton: React.FC<SelectTextButtonProps> = ({
+  onClick,
+  className,
+}) => {
   return (
     <Button
       variant="ghost"
@@ -20,4 +23,3 @@ export const SelectTextButton: React.FC<SelectTextButtonProps> = ({ onClick, cla
     </Button>
   );
 };
-

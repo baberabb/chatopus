@@ -1,4 +1,4 @@
-import { Theme, ThemeType } from '../types';
+import { Theme, ThemeType } from "../types";
 
 export const themes: Record<ThemeType, Theme> = {
   light: {
@@ -41,6 +41,6 @@ export const initializeStore = async () => {
     theme: {
       type: initialTheme,
       values: themes[initialTheme],
-    }
+    },
   };
 };

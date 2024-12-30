@@ -14,7 +14,10 @@ export class StateGuard {
   }
 
   private isStreaming(): boolean {
-    return this.state.messages[this.state.messages.length - 1]?.status === 'streaming';
+    return (
+      this.state.messages[this.state.messages.length - 1]?.status ===
+      "streaming"
+    );
   }
 
   canSendMessage(): { allowed: boolean; reason?: string } {
@@ -43,7 +46,7 @@ export class StateGuard {
       };
     }
 
-    const message = this.state.messages.find(msg => msg.id === messageId);
+    const message = this.state.messages.find((msg) => msg.id === messageId);
     if (!message) {
       return {
         allowed: false,
@@ -51,7 +54,7 @@ export class StateGuard {
       };
     }
 
-    if (message.status === 'streaming') {
+    if (message.status === "streaming") {
       return {
         allowed: false,
         reason: "Cannot edit streaming message",
@@ -79,8 +82,14 @@ export class StateGuard {
     return { allowed: true };
   }
 
-  canDeleteConversation(conversationId: number): { allowed: boolean; reason?: string } {
-    if (this.isStreaming() && conversationId === this.state.currentConversationId) {
+  canDeleteConversation(conversationId: number): {
+    allowed: boolean;
+    reason?: string;
+  } {
+    if (
+      this.isStreaming() &&
+      conversationId === this.state.currentConversationId
+    ) {
       return {
         allowed: false,
         reason: "Cannot delete active conversation while streaming",

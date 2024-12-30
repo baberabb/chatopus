@@ -107,13 +107,13 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
   // Use specific selectors to avoid unnecessary rerenders
   const conversations = useChatStore((state) => state.conversations);
   const currentConversationId = useChatStore(
-    (state) => state.currentConversationId
+    (state) => state.currentConversationId,
   );
   const isLoading = useChatStore((state) => state.isLoading);
   const error = useChatStore((state) => state.error);
   const initialized = useChatStore((state) => state.initialized);
   const setCurrentConversationId = useChatStore(
-    (state) => state.setCurrentConversationId
+    (state) => state.setCurrentConversationId,
   );
   const loadConversations = useChatStore((state) => state.loadConversations);
   const loadConversation = useChatStore((state) => state.loadConversation);

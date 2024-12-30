@@ -7,14 +7,18 @@ export function useChat() {
   // Use specific selectors to avoid unnecessary rerenders
   const messages = useChatStore((state) => state.messages);
   const conversations = useChatStore((state) => state.conversations);
-  const currentConversationId = useChatStore((state) => state.currentConversationId);
+  const currentConversationId = useChatStore(
+    (state) => state.currentConversationId,
+  );
   const isLoading = useChatStore((state) => state.isLoading);
   const error = useChatStore((state) => state.error);
   const initialized = useChatStore((state) => state.initialized);
   const sendMessage = useChatStore((state) => state.sendMessage);
   const loadConversations = useChatStore((state) => state.loadConversations);
   const loadConversation = useChatStore((state) => state.loadConversation);
-  const setCurrentConversationId = useChatStore((state) => state.setCurrentConversationId);
+  const setCurrentConversationId = useChatStore(
+    (state) => state.setCurrentConversationId,
+  );
   const createConversation = useChatStore((state) => state.createConversation);
   const updateConversation = useChatStore((state) => state.updateConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
@@ -49,58 +53,67 @@ export function useChat() {
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
 
   // Message editing
-  const handleEdit = useCallback(async (messageId: number, newContent: string) => {
-    try {
-      const messageIndex = findMessageById(messages, messageId);
-      if (messageIndex === -1) return;
+  const handleEdit = useCallback(
+    async (messageId: number, newContent: string) => {
+      try {
+        const messageIndex = findMessageById(messages, messageId);
+        if (messageIndex === -1) return;
 
-      // Update message optimistically
-      const updatedMessages = [...messages];
-      updatedMessages[messageIndex] = {
-        ...updatedMessages[messageIndex],
-        content: newContent,
-        isEditing: false,
-      };
-      setMessages(updatedMessages);
+        // Update message optimistically
+        const updatedMessages = [...messages];
+        updatedMessages[messageIndex] = {
+          ...updatedMessages[messageIndex],
+          content: newContent,
+          isEditing: false,
+        };
+        setMessages(updatedMessages);
 
-      // Save to backend
-      await invoke("edit_message", { messageId: messageId.toString(), newContent });
-      setEditingMessageId(null);
+        // Save to backend
+        await invoke("edit_message", {
+          messageId: messageId.toString(),
+          newContent,
+        });
+        setEditingMessageId(null);
 
-      // Reload conversation to get updated messages
-      if (currentConversationId) {
-        await loadConversation(currentConversationId);
+        // Reload conversation to get updated messages
+        if (currentConversationId) {
+          await loadConversation(currentConversationId);
+        }
+      } catch (error) {
+        console.error("Failed to edit message:", error);
+
+        // Revert on error
+        const messageIndex = findMessageById(messages, messageId);
+        if (messageIndex !== -1) {
+          const updatedMessages = [...messages];
+          updatedMessages[messageIndex] = {
+            ...updatedMessages[messageIndex],
+            isEditing: false,
+          };
+          setMessages(updatedMessages);
+        }
+        setEditingMessageId(null);
       }
-    } catch (error) {
-      console.error("Failed to edit message:", error);
-      
-      // Revert on error
+    },
+    [messages, setMessages, currentConversationId, loadConversation],
+  );
+
+  // Start editing
+  const startEdit = useCallback(
+    (messageId: number) => {
       const messageIndex = findMessageById(messages, messageId);
       if (messageIndex !== -1) {
         const updatedMessages = [...messages];
         updatedMessages[messageIndex] = {
           ...updatedMessages[messageIndex],
-          isEditing: false,
+          isEditing: true,
         };
         setMessages(updatedMessages);
+        setEditingMessageId(messageId);
       }
-      setEditingMessageId(null);
-    }
-  }, [messages, setMessages, currentConversationId, loadConversation]);
-
-  // Start editing
-  const startEdit = useCallback((messageId: number) => {
-    const messageIndex = findMessageById(messages, messageId);
-    if (messageIndex !== -1) {
-      const updatedMessages = [...messages];
-      updatedMessages[messageIndex] = {
-        ...updatedMessages[messageIndex],
-        isEditing: true,
-      };
-      setMessages(updatedMessages);
-      setEditingMessageId(messageId);
-    }
-  }, [messages, setMessages]);
+    },
+    [messages, setMessages],
+  );
 
   // Cancel message
   const cancelMessage = useCallback(async () => {
@@ -131,13 +144,13 @@ export function useChat() {
     isLoading,
     error,
     editingMessageId,
-    
+
     // Message actions
     sendMessage,
     handleEdit,
     startEdit,
     cancelMessage,
-    
+
     // Conversation actions
     loadConversations,
     loadConversation,

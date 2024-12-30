@@ -3,7 +3,7 @@
  * Custom hook for handling code execution in different languages
  */
 
-import { useState } from 'react';
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 /**
@@ -23,7 +23,10 @@ interface ExecutionResult {
  * @param language - The programming language
  * @returns Promise with execution result
  */
-const executeCode = async (code: string, language: string): Promise<ExecutionResult> => {
+const executeCode = async (
+  code: string,
+  language: string,
+): Promise<ExecutionResult> => {
   try {
     switch (language.toLowerCase()) {
       case "python": {
@@ -45,14 +48,14 @@ const executeCode = async (code: string, language: string): Promise<ExecutionRes
       default:
         return {
           output: `Language ${language} is not supported yet`,
-          success: false
+          success: false,
         };
     }
   } catch (error) {
     console.error("Code execution error:", error);
     return {
       output: `Error: ${error instanceof Error ? error.message : String(error)}`,
-      success: false
+      success: false,
     };
   }
 };
@@ -73,13 +76,13 @@ export const useCodeExecution = (code: string, language: string) => {
     setError(null);
 
     const result = await executeCode(code, language);
-    
+
     if (result.success) {
       setOutput(result.output);
     } else {
       setError(result.output);
     }
-    
+
     setIsRunning(false);
   };
 

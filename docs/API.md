@@ -229,7 +229,7 @@ const handleSaveSettings = async (provider: ProviderType) => {
 const updateProviderSetting = async (
   provider: ProviderType,
   key: keyof ProviderSettings,
-  value: any
+  value: any,
 ) => {
   // Get current settings
   const currentSettings = settings[provider];

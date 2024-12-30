@@ -45,7 +45,7 @@ createRoot(rootElement).render(
         <App />
       </ModelProvider>
     </TooltipProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );
 
 /* Original layout preserved for reference:

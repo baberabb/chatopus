@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 export function useStreamEvents(onComplete?: () => void) {
@@ -8,7 +8,7 @@ export function useStreamEvents(onComplete?: () => void) {
     });
 
     return () => {
-      unlisten.then(fn => fn());
+      unlisten.then((fn) => fn());
     };
   }, [onComplete]);
 }

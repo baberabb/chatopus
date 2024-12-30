@@ -1,16 +1,23 @@
-import { useState } from 'react';
-import { CustomParameterFormData, ProviderType, ProviderSettings } from '../types';
-import { providerConfigs } from '../config/providers';
+import { useState } from "react";
+import {
+  CustomParameterFormData,
+  ProviderType,
+  ProviderSettings,
+} from "../types";
+import { providerConfigs } from "../config/providers";
 
 export function useCustomParameters(
   provider: ProviderType,
-  onSettingsUpdate: (provider: ProviderType, settings: Partial<ProviderSettings>) => void
+  onSettingsUpdate: (
+    provider: ProviderType,
+    settings: Partial<ProviderSettings>,
+  ) => void,
 ) {
   const [showForm, setShowForm] = useState(false);
 
   const addCustomParameter = (parameter: CustomParameterFormData) => {
     const providerConfig = providerConfigs[provider];
-    
+
     // Add to provider config
     providerConfig.customParameters = {
       ...(providerConfig.customParameters || {}),

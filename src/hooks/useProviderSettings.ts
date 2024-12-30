@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ProviderType, ProviderSettings } from "../types";
 
@@ -6,7 +6,9 @@ export function useProviderSettings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeProvider, setActiveProvider] = useState<string>("");
-  const [settings, setSettings] = useState<Record<string, ProviderSettings>>({});
+  const [settings, setSettings] = useState<Record<string, ProviderSettings>>(
+    {},
+  );
 
   const loadConfig = async () => {
     try {
@@ -19,7 +21,7 @@ export function useProviderSettings() {
       setActiveProvider(config.active_provider);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load config');
+      setError(err instanceof Error ? err.message : "Failed to load config");
     } finally {
       setLoading(false);
     }
@@ -28,12 +30,12 @@ export function useProviderSettings() {
   const updateProviderSetting = async (
     provider: ProviderType,
     key: keyof ProviderSettings,
-    value: any
+    value: any,
   ) => {
     try {
       // Get current settings from state
       const currentSettings = settings[provider];
-      
+
       if (!currentSettings) {
         throw new Error("Provider settings not found");
       }
@@ -48,8 +50,11 @@ export function useProviderSettings() {
       if (!newSettings.model) {
         throw new Error("Model is required");
       }
-      
-      await invoke("update_provider_settings", { provider, settings: newSettings });
+
+      await invoke("update_provider_settings", {
+        provider,
+        settings: newSettings,
+      });
       setSettings((prev) => ({
         ...prev,
         [provider]: newSettings,
@@ -57,11 +62,12 @@ export function useProviderSettings() {
       setError(null);
 
       // If the model was changed and this is the active provider, dispatch provider-changed event
-      if (key === 'model' && provider === activeProvider) {
-        window.dispatchEvent(new Event('provider-changed'));
+      if (key === "model" && provider === activeProvider) {
+        window.dispatchEvent(new Event("provider-changed"));
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update settings';
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to update settings";
       setError(errorMessage);
       throw new Error(errorMessage);
     }
@@ -72,11 +78,11 @@ export function useProviderSettings() {
       await invoke("set_active_provider", { provider });
       setActiveProvider(provider);
       setError(null);
-      
+
       // Dispatch provider-changed event
-      window.dispatchEvent(new Event('provider-changed'));
+      window.dispatchEvent(new Event("provider-changed"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to set provider');
+      setError(err instanceof Error ? err.message : "Failed to set provider");
       throw err;
     }
   };

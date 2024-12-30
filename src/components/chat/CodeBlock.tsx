@@ -124,7 +124,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   // Initialize code execution state
   const { isRunning, output, error, runCode } = useCodeExecution(
     code,
-    language
+    language,
   );
 
   const isExecutable = ["python", "html"].includes(language.toLowerCase());
@@ -144,7 +144,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
 
   const capitalizedLanguage = useMemo(
     () => language.charAt(0).toUpperCase() + language.slice(1),
-    [language]
+    [language],
   );
 
   return (

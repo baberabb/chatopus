@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
-
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
@@ -10,27 +9,27 @@ export default defineConfig({
   plugins: [
     react({
       babel: {
-        plugins: [['babel-plugin-react-compiler', { target: '19' }]],
+        plugins: [["babel-plugin-react-compiler", { target: "19" }]],
       },
     }),
   ],
   build: {
-    target: 'esnext',
-    minify: 'terser',
+    target: "esnext",
+    minify: "terser",
     rollupOptions: {
       output: {
         manualChunks: {
           // todo: add more
-          'vendor': ['react', 'react-dom', 'zustand']
-        }
-      }
+          vendor: ["react", "react-dom", "zustand"],
+        },
+      },
     },
     terserOptions: {
       compress: {
         ecma: 2020,
-        passes: 2
-      }
-    }
+        passes: 2,
+      },
+    },
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
@@ -54,9 +53,9 @@ export default defineConfig({
       ignored: ["**/src-tauri/**"],
     },
   },
-    resolve: {
-      alias: {
-          "@": path.resolve(__dirname, "./src"),
-      },
-    }
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
 });

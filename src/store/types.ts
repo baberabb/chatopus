@@ -8,5 +8,5 @@ export type {
   ThemeType,
   ModelConfig,
   ProviderSettings,
-  ProviderType
-} from '../types';
+  ProviderType,
+} from "../types";

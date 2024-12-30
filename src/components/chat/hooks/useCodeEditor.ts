@@ -1,18 +1,18 @@
 /**
  * useCodeEditor.ts
  * Custom hook for managing code editor state and functionality in code blocks.
- * 
+ *
  * This hook handles:
  * 1. Code content updates during streaming and non-streaming states
  * 2. Edit mode functionality with textarea resizing
  * 3. Keyboard interactions (tab, escape)
- * 
+ *
  * During streaming, code updates are applied immediately to ensure real-time
  * content display. After streaming completes, updates are scheduled with
  * requestAnimationFrame to optimize rendering performance.
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from "react";
 
 /**
  * Hook for managing code editor state and operations
@@ -73,11 +73,11 @@ export const useCodeEditor = (initialValue: string, isStreaming: boolean) => {
       const target = e.target as HTMLTextAreaElement;
       const start = target.selectionStart;
       const end = target.selectionEnd;
-      
+
       // Insert two spaces for tab
       const newCode = code.substring(0, start) + "  " + code.substring(end);
       setCode(newCode);
-      
+
       // Maintain cursor position
       setTimeout(() => {
         target.selectionStart = target.selectionEnd = start + 2;

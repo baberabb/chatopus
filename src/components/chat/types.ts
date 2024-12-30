@@ -1,4 +1,4 @@
-import { Message } from '../../types';
+import { Message } from "../../types";
 
 // Re-export Message type
 export type { Message };

@@ -41,10 +41,10 @@ export function stringAvatar(name: string | undefined) {
  * Helper function to get current time in consistent format
  */
 export const getCurrentTime = () => {
-  return new Date().toLocaleTimeString('en-US', { 
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true 
+  return new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   });
 };
 
@@ -60,13 +60,17 @@ export const formatMessageRole = (role: string, model?: string) => {
  * Helper function to find message index by ID
  */
 export const findMessageById = (messages: Message[], id: number) => {
-  return messages.findIndex(msg => msg.id === id);
+  return messages.findIndex((msg) => msg.id === id);
 };
 
 /**
  * Helper function to create a temporary message object
  */
-export const createTempMessage = (content: string, role: "user" | "assistant", model?: string): Message => {
+export const createTempMessage = (
+  content: string,
+  role: "user" | "assistant",
+  model?: string,
+): Message => {
   return {
     id: Date.now(),
     content,
@@ -77,8 +81,8 @@ export const createTempMessage = (content: string, role: "user" | "assistant", m
   };
 };
 
-import gsap from 'gsap';
-import ScrollToPlugin from 'gsap/ScrollToPlugin';
+import gsap from "gsap";
+import ScrollToPlugin from "gsap/ScrollToPlugin";
 
 // Register ScrollToPlugin with GSAP
 gsap.registerPlugin(ScrollToPlugin);
@@ -88,16 +92,19 @@ gsap.registerPlugin(ScrollToPlugin);
  * @param container - The chat container element
  * @param smooth - Whether to use smooth scrolling
  */
-export const scrollToBottom = (container: HTMLElement | null, smooth: boolean = true) => {
+export const scrollToBottom = (
+  container: HTMLElement | null,
+  smooth: boolean = true,
+) => {
   if (!container) return;
-  
+
   const scrollHeight = container.scrollHeight;
-  
+
   if (smooth) {
     gsap.to(container, {
       duration: 0.5,
       scrollTo: { y: scrollHeight, autoKill: true },
-      ease: "power2.out"
+      ease: "power2.out",
     });
   } else {
     container.scrollTop = scrollHeight;

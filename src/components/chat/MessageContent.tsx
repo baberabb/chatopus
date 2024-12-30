@@ -189,13 +189,13 @@ export const MessageContent: React.FC<MessageContentProps> = ({
         );
       },
     }),
-    [isStreaming]
+    [isStreaming],
   );
 
   // Format message content for display
   const displayContent = useMemo(
     () => formatMessageContent(message.content),
-    [message.content]
+    [message.content],
   );
 
   return (
