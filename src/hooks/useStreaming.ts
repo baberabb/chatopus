@@ -25,14 +25,14 @@ export function useStreaming() {
 
   useEffect(() => {
     // Listen for stream start events
-    const unlistenStart = listen("stream-start", () => {
+    const unlistenStart = listen("stream-response", () => {
       setIsStreaming(true);
     });
 
     // Listen for stream progress events
-    const unlistenProgress = listen("stream-progress", () => {
-      setIsStreaming(true);
-    });
+    // const unlistenProgress = listen("stream-progress", () => {
+    //   setIsStreaming(true);
+    // });
 
     // Listen for stream complete events
     const unlistenComplete = listen("stream-complete", () => {
@@ -41,7 +41,7 @@ export function useStreaming() {
 
     return () => {
       unlistenStart.then((fn) => fn());
-      unlistenProgress.then((fn) => fn());
+      // unlistenProgress.then((fn) => fn());
       unlistenComplete.then((fn) => fn());
     };
   }, []);
