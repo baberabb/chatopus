@@ -10,8 +10,8 @@
  * - Displays system messages and error states
  */
 
-import React, { useRef, useEffect, useState, useCallback } from "react";
-import { useZustandTheme, useChatStore } from "../../store";
+import React, { useRef, useEffect, useState } from "react";
+import { useZustandTheme } from "../../store";
 import { ChevronDown } from "lucide-react";
 import { useStreaming } from "../../hooks/useStreaming";
 import { Message, FileAttachment } from "../../types";
@@ -121,29 +121,10 @@ export function ChatContainer() {
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Use store directly to avoid potential timing issues with selectors
-  const store = useChatStore();
-  const {
-    messages,
-    currentConversationId,
-    isLoading,
-    error,
-    initialized,
-    sendMessage,
-    cancelMessage,
-  } = store;
-
-  // Show loading state while store is initializing
-  if (!initialized) {
-    return (
-      <div className="flex justify-center items-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
-      </div>
-    );
-  }
-
-  const { handleEdit } = useChat();
+  const { handleEdit, messages,currentConversationId,isLoading,error,sendMessage,cancelMessage } = useChat();
   const latestMessageContent = messages[messages.length - 1]?.content || "";
+  const isLatestMessageFromUser = messages[messages.length - 1]?.role === "user";
+  const wasStreaming = messages[messages.length - 1]?.status === "streaming";
 
   // Handle auto-scrolling behavior
   useEffect(() => {
@@ -153,10 +134,6 @@ export function ChatContainer() {
       // Smooth scroll during streaming
       scrollToBottom(messageListRef.current, true);
     } else {
-      const isLatestMessageFromUser =
-        messages[messages.length - 1]?.role === "user";
-      const wasStreaming =
-        messages[messages.length - 1]?.status === "streaming";
 
       // Add delay for assistant messages that were previously streaming
       if (!isLatestMessageFromUser && wasStreaming) {
@@ -167,7 +144,7 @@ export function ChatContainer() {
         scrollToBottom(messageListRef.current, !isLatestMessageFromUser);
       }
     }
-  }, [messages.length, latestMessageContent, isStreaming, shouldAutoScroll]);
+  }, [messages.length, latestMessageContent, isStreaming, shouldAutoScroll, isLatestMessageFromUser, wasStreaming]);
 
   /**
    * Handles message reactions (TODO: Implement persistence)
