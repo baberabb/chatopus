@@ -51,7 +51,7 @@ listen("stream-complete", () => {
     const updatedMessages = [...messages];
     updatedMessages[lastIndex] = updatedMessage;
 
-    useChatStore.setState({ messages: updatedMessages });
+    useChatStore.setState({ messages: updatedMessages, isStreaming: false});
 
     logger.state('Store', {
       action: 'completeStream',
@@ -131,6 +131,7 @@ interface ChatState {
   error: string | null;
   isLoading: boolean;
   initialized: boolean;
+  isStreaming: boolean,
 
   // Conversation metadata
   conversations: Conversation[];
@@ -164,6 +165,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   error: null,
   isLoading: false,
   initialized: false,
+  isStreaming: false,
 
   conversations: [],
   currentConversationId: null,
@@ -175,9 +177,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // --------------------------------------
   sendMessage: async (content, attachments) => {
     try {
+      set({ isStreaming: true });
       const { config } = useModelStore.getState();
       const providerConfig = config?.providers[config.active_provider];
       const currentModel = providerConfig?.model;
+
 
       // Create two optimistic messages: user + assistant
       const userMessage = createOptimisticMessage(content, 'user', 'complete', attachments);
@@ -254,7 +258,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const updatedMessages = [...messages];
       updatedMessages[lastIndex] = updatedMessage;
 
-      set({ messages: updatedMessages });
+      set({ messages: updatedMessages, isStreaming: true });
 
       logger.state('Store', {
         action: 'appendStreamChunk',
@@ -292,6 +296,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   cancelMessage: async () => {
     try {
       await invoke('cancel_message');
+      set({ isStreaming: false });
       const messages = get().messages;
       const lastIndex = messages.length - 1;
       const lastMessage = messages[lastIndex];
@@ -320,6 +325,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
       }
     } catch (error) {
+      set({ isStreaming: false });
       const errorDetails = error instanceof Error ? error.message : JSON.stringify(error);
       console.error('Failed to cancel message:', errorDetails);
       set({ error: errorDetails });
