@@ -72,8 +72,28 @@ pub async fn process_message<R: Runtime>(
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
-    // Get or create conversation
-    let conversation_id = chat::get_or_create_conversation_cached(&app_state).await?;
+    // Get or create conversation ID
+    let conversation_id = if let Some(id) = request.conversation_id {
+        // Use provided conversation ID
+        id
+    } else {
+        // Clear any cached conversation ID
+        {
+            let mut guard = app_state.conversation_id.lock();
+            *guard = None;
+        }
+
+        // Create new conversation
+        let new_id = chat::create_conversation(db, None).await?;
+
+        // Update cache with new conversation
+        {
+            let mut guard = app_state.conversation_id.lock();
+            *guard = Some(new_id);
+        }
+
+        new_id
+    };
 
     // Get provider configuration
     let (provider_type, streaming_enabled, provider_settings) = {
@@ -253,14 +273,21 @@ pub async fn clear_chat_history(app_handle: AppHandle) -> std::result::Result<i6
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
+    // Clear conversation cache first
+    {
+        let mut guard = app_state.conversation_id.lock();
+        *guard = None;
+    }
+
+    // Create new conversation with no parent
     let new_id = chat::create_conversation(db, None)
         .await
         .map_err(|e| e.message)?;
 
-    // Update cached conversation_id
+    // Update cache with new conversation
     {
-        let mut cid_guard = app_state.conversation_id.lock();
-        *cid_guard = Some(new_id);
+        let mut guard = app_state.conversation_id.lock();
+        *guard = Some(new_id);
     }
 
     Ok(new_id)
@@ -403,7 +430,23 @@ pub async fn delete_conversation(
 pub async fn create_conversation(app_handle: AppHandle) -> Result<i64, String> {
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
-    chat::create_conversation(db, None)
+
+    // Clear conversation cache first
+    {
+        let mut guard = app_state.conversation_id.lock();
+        *guard = None;
+    }
+
+    // Create new conversation with no parent
+    let new_id = chat::create_conversation(db, None)
         .await
-        .map_err(|e| e.message)
+        .map_err(|e| e.message)?;
+
+    // Update cache with new conversation
+    {
+        let mut guard = app_state.conversation_id.lock();
+        *guard = Some(new_id);
+    }
+
+    Ok(new_id)
 }
