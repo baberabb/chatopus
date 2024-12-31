@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO attachments (message_id, name, type, size, path, preview_path)\n        VALUES (?, ?, ?, ?, ?, ?)\n        RETURNING \n            id as \"id!\",\n            message_id as \"message_id!\",\n            name as \"name!\",\n            type as \"file_type!\",\n            size as \"size!\",\n            path as \"url!\",\n            preview_path as preview_url,\n            created_at as \"created_at!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "message_id!",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "file_type!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "size!",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "url!",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "preview_url",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "927766faa4cbc4f5794583de90f5a7cb9bb6e0f79bdb671018f0780ac90ec410"
+}

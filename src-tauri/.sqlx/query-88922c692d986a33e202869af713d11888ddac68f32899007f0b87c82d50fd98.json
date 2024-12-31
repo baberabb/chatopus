@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('conversations', 'messages', 'models')",
+  "query": "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('conversations', 'messages', 'models', 'attachments')",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       true
     ]
   },
-  "hash": "33789fdcc39fab253e8c643f78925dc4abd326884ac8377b9c380cd7a518c519"
+  "hash": "88922c692d986a33e202869af713d11888ddac68f32899007f0b87c82d50fd98"
 }

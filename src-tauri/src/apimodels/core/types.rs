@@ -41,6 +41,10 @@ pub struct Message {
     #[serde(default)]
     pub reactions: Option<MessageReactions>,
 
+    /// Optional attachments for the message
+    #[serde(default)]
+    pub attachments: Option<Vec<crate::attachments::Attachment>>,
+
     /// ID of the original message if this is a modification
     pub original_message_id: Option<String>,
 }

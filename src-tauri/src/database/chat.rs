@@ -50,13 +50,16 @@ pub struct ConversationRow {
     pub system_message: Option<String>,
 }
 
-impl From<DbMessage> for Message {
-    fn from(db_msg: DbMessage) -> Self {
-        let timestamp = DateTime::parse_from_rfc3339(&db_msg.created_at)
+impl DbMessage {
+    pub async fn into_message(
+        self,
+        db: &sqlx::Pool<sqlx::Sqlite>,
+    ) -> Result<Message, ErrorResponse> {
+        let timestamp = DateTime::parse_from_rfc3339(&self.created_at)
             .map(|dt| dt.with_timezone(&Local).format("%I:%M %p").to_string())
             .unwrap_or_else(|_| Local::now().format("%I:%M %p").to_string());
 
-        let metadata = db_msg
+        let metadata = self
             .metadata
             .and_then(|m| serde_json::from_str::<serde_json::Value>(&m).ok());
 
@@ -69,24 +72,39 @@ impl From<DbMessage> for Message {
         });
 
         let content =
-            serde_json::from_str::<Vec<ContentBlock>>(&db_msg.content).unwrap_or_else(|_| {
+            serde_json::from_str::<Vec<ContentBlock>>(&self.content).unwrap_or_else(|_| {
                 vec![ContentBlock {
                     r#type: "text".to_string(),
-                    text: Some(db_msg.content),
+                    text: Some(self.content),
                     image_url: None,
                 }]
             });
 
-        Message {
-            id: db_msg.id.to_string(),
-            role: db_msg.role,
+        // Fetch attachments for this message
+        let attachments = crate::attachments::get_message_attachments_internal(db, self.id)
+            .await
+            .map_err(|e| ErrorResponse {
+                message: "Failed to fetch attachments".to_string(),
+                details: Some(e),
+            })?;
+
+        let attachments = if attachments.is_empty() {
+            None
+        } else {
+            Some(attachments)
+        };
+
+        Ok(Message {
+            id: self.id.to_string(),
+            role: self.role,
             content,
             timestamp,
             model,
             metadata,
             reactions: Some(MessageReactions { thumbs_up: 0 }),
-            original_message_id: db_msg.original_message_id.map(|id| id.to_string()),
-        }
+            attachments,
+            original_message_id: self.original_message_id.map(|id| id.to_string()),
+        })
     }
 }
 
@@ -261,7 +279,7 @@ pub async fn get_messages_for_conversation(
     db: &sqlx::Pool<sqlx::Sqlite>,
     conversation_id: i64,
 ) -> Result<Vec<Message>, ErrorResponse> {
-    let messages = sqlx::query_as!(
+    let db_messages = sqlx::query_as!(
         DbMessage,
         r#"
             SELECT 
@@ -280,10 +298,12 @@ pub async fn get_messages_for_conversation(
     )
     .fetch_all(db)
     .await
-    .map_err(db_error)?
-    .into_iter()
-    .map(Message::from)
-    .collect::<Vec<Message>>();
+    .map_err(db_error)?;
+
+    let mut messages = Vec::with_capacity(db_messages.len());
+    for db_msg in db_messages {
+        messages.push(db_msg.into_message(db).await?);
+    }
 
     Ok(messages)
 }
@@ -486,6 +506,7 @@ pub async fn save_message(
         model: model.map(String::from),
         metadata,
         reactions: Some(MessageReactions { thumbs_up: 0 }),
+        attachments: None, // New messages start with no attachments
         original_message_id: original_message_id.map(|id| id.to_string()),
     };
 

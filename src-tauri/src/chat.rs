@@ -50,6 +50,7 @@ impl From<Error> for ProcessMessageError {
 pub struct ProcessMessageRequest {
     message: String,
     conversation_id: Option<i64>,
+    attachments: Option<Vec<crate::attachments::SaveAttachmentRequest>>,
 }
 
 #[derive(Clone)]
@@ -119,11 +120,13 @@ pub async fn process_message<R: Runtime>(
         )
     };
 
-    // Save user message
+    // Save user message and attachments
     let mut tx = db.begin().await.map_err(|e| chat::ErrorResponse {
         message: "Database error".to_string(),
         details: Some(e.to_string()),
     })?;
+
+    // Save message first
     let user_message = chat::save_message(
         &mut tx,
         conversation_id,
@@ -137,6 +140,20 @@ pub async fn process_message<R: Runtime>(
         None,
     )
     .await?;
+
+    // Save any attachments
+    if let Some(attachments) = request.attachments {
+        for mut attachment_request in attachments {
+            attachment_request.message_id = user_message.id.parse().unwrap();
+            crate::attachments::save_attachment(app_handle.clone(), attachment_request)
+                .await
+                .map_err(|e| chat::ErrorResponse {
+                    message: "Failed to save attachment".to_string(),
+                    details: Some(e),
+                })?;
+        }
+    }
+
     tx.commit().await.map_err(|e| chat::ErrorResponse {
         message: "Database error".to_string(),
         details: Some(e.to_string()),

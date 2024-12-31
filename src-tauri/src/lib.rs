@@ -11,6 +11,7 @@ use tokio::sync::OnceCell;
 type Db = Pool<Sqlite>;
 
 mod apimodels;
+mod attachments;
 mod chat;
 mod config;
 mod daemon;
@@ -76,7 +77,7 @@ async fn setup_db(data_dir: &std::path::Path) -> Result<Db, Box<dyn StdError>> {
 
             // Verify tables exist
             let tables = sqlx::query!(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('conversations', 'messages', 'models')"
+                "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('conversations', 'messages', 'models', 'attachments')"
             )
             .fetch_all(&pool)
             .await?;
@@ -123,6 +124,9 @@ pub fn run() {
         )
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
+            attachments::save_attachment,
+            attachments::get_message_attachments,
+            attachments::delete_attachment,
             chat::process_message,
             chat::get_chat_history,
             chat::clear_chat_history,
