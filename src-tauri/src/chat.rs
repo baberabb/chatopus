@@ -232,6 +232,15 @@ pub async fn process_message<R: Runtime>(
             )
             .await?;
 
+        // For non-streaming responses, emit a single stream-response event with the full content
+        if let Some(text) = response
+            .content
+            .first()
+            .and_then(|block| block.text.as_ref())
+        {
+            window.emit("stream-response", text).map_err(Error::from)?;
+        }
+
         response.content
     };
 
