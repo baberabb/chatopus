@@ -1,4 +1,4 @@
-import { Message } from "./types";
+import { Message, ContentBlock } from "../../types";
 
 /**
  * Helper function to generate consistent colors for avatars based on string input
@@ -109,4 +109,30 @@ export const scrollToBottom = (
   } else {
     container.scrollTop = scrollHeight;
   }
+};
+
+/**
+ * Helper function to format content blocks or parse stringified content blocks
+ */
+export const formatContentBlocks = (content: string | ContentBlock[]): string => {
+  if (typeof content === "string") {
+    try {
+      // Try to parse as JSON first in case it's a stringified ContentBlock array
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) {
+        return parsed.map(block => block.text || "").join("\n");
+      }
+      return content;
+    } catch {
+      return content;
+    }
+  }
+  return content
+    .map((block) => {
+      if (block.image_url) {
+        return `![${block.text || "Image"}](${block.image_url})`;
+      }
+      return block.text || "";
+    })
+    .join("\n");
 };

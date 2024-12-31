@@ -25,7 +25,7 @@ export const MessageEditor: React.FC<MessageEditorProps> = ({
       textareaRef.current.focus();
       textareaRef.current.setSelectionRange(
         textareaRef.current.value.length,
-        textareaRef.current.value.length,
+        textareaRef.current.value.length
       );
     }
   }, []);

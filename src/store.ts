@@ -392,11 +392,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
         throw new Error("Conversation not found");
       }
 
-      // Load messages + conversation concurrently
-      const [messages, conversation] = await Promise.all([
-        invoke<Message[]>("load_conversation_messages", { conversationId: id }),
-        invoke<Conversation>("get_conversation", { id }),
-      ]);
+      console.log("Loading conversation:", id);
+
+      // Load messages for the conversation
+      const messages = await invoke<Message[]>("load_conversation_messages", { conversationId: id })
+        .then(msgs => {
+          console.log("Loaded messages:", msgs);
+          return msgs;
+        })
+        .catch(err => {
+          console.error("Failed to load messages:", err);
+          throw err;
+        });
+
+      // Get conversation info from the already loaded conversations list
+      const conversation = get().conversations.find(c => c.id === id);
+      if (!conversation) {
+        throw new Error("Conversation not found");
+      }
+
+      console.log("Setting state with:", { messages, id, systemMessage: conversation.systemMessage });
 
       set({
         messages,

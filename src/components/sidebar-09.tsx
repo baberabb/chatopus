@@ -44,6 +44,7 @@ import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
 import { useZustandTheme, useChatStore } from "../store";
 import { Conversation } from "../types";
 import ErrorBoundary from "./ErrorBoundary";
+import { formatContentBlocks } from "./chat/utils";
 
 const data = {
   user: {
@@ -107,13 +108,13 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
   // Use specific selectors to avoid unnecessary rerenders
   const conversations = useChatStore((state) => state.conversations);
   const currentConversationId = useChatStore(
-    (state) => state.currentConversationId,
+    (state) => state.currentConversationId
   );
   const isLoading = useChatStore((state) => state.isLoading);
   const error = useChatStore((state) => state.error);
   const initialized = useChatStore((state) => state.initialized);
   const setCurrentConversationId = useChatStore(
-    (state) => state.setCurrentConversationId,
+    (state) => state.setCurrentConversationId
   );
   const loadConversations = useChatStore((state) => state.loadConversations);
   const loadConversation = useChatStore((state) => state.loadConversation);
@@ -292,7 +293,7 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
                     >
                       <div className="flex w-full items-center gap-2">
                         <span className="font-medium">
-                          {chat.title || "New Chat"}
+                          {formatContentBlocks(chat.title) || "New Chat"}
                         </span>
                         <span className="ml-auto text-xs">
                           {chat.timestamp}
@@ -310,7 +311,7 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
                         className="line-clamp-2 w-[260px] whitespace-break-spaces text-xs"
                         style={{ color: theme.textSecondary }}
                       >
-                        {chat.preview}
+                        {formatContentBlocks(chat.preview) || ""}
                       </span>
                     </button>
                   </div>

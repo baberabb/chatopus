@@ -109,7 +109,7 @@ export interface ChatState {
   // Message actions
   sendMessage: (
     content: string,
-    attachments?: FileAttachment[],
+    attachments?: FileAttachment[]
   ) => Promise<void>;
   appendStreamChunk: (chunk: string) => void;
   setMessages: (messages: Message[]) => void;
@@ -124,7 +124,7 @@ export interface ChatState {
   createConversation: () => Promise<number>;
   updateConversation: (
     id: number,
-    updates: Partial<Conversation>,
+    updates: Partial<Conversation>
   ) => Promise<void>;
   deleteConversation: (id: number) => Promise<void>;
 }
@@ -142,7 +142,7 @@ export interface ModelStore {
   setConfig: (config: ModelConfig) => void;
   updateProviderSettings: (
     provider: ProviderType,
-    settings: ProviderSettings,
+    settings: ProviderSettings
   ) => void;
   setActiveProvider: (provider: ProviderType) => void;
 }

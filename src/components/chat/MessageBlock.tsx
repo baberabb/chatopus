@@ -6,11 +6,12 @@
 
 import React, { useState } from "react";
 import { useZustandTheme } from "../../store";
-import { Message, ContentBlock } from "../../types";
+import { Message } from "../../types";
 import { UserAvatar } from "./UserAvatar";
 import { MessageContent } from "./MessageContent";
 import { MessageActions } from "./MessageActions";
 import { MessageEditor } from "./MessageEditor";
+import { formatContentBlocks } from "./utils";
 
 /**
  * Props for the MessageBlock component
@@ -46,22 +47,12 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
   const [isHovered, setIsHovered] = useState(false);
 
   /**
-   * Converts message content to a string format suitable for copying
-   * @param content - Message content that can be either string or ContentBlock array
-   * @returns Formatted string representation of the content
-   */
-  const formatContentForCopy = (content: string | ContentBlock[]): string => {
-    if (typeof content === "string") return content;
-    return content.map((block) => block.text || "").join("\n");
-  };
-
-  /**
    * Handles copying message content to clipboard
    * Includes error handling for clipboard operations
    */
   const handleCopy = async () => {
     try {
-      const formattedContent = formatContentForCopy(message.content);
+      const formattedContent = formatContentBlocks(message.content);
       await navigator.clipboard.writeText(formattedContent);
     } catch (error) {
       console.error("Failed to copy message:", error);
@@ -101,10 +92,10 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
       <div className="flex-grow min-w-0 pl-3 pr-4">
         {message.isEditing ? (
           <MessageEditor
-            content={formatContentForCopy(message.content)}
+            content={formatContentBlocks(message.content)}
             onSave={(content) => onEdit?.(message.id, content)}
             onCancel={() =>
-              onEdit?.(message.id, formatContentForCopy(message.content))
+              onEdit?.(message.id, formatContentBlocks(message.content))
             }
           />
         ) : (
@@ -112,7 +103,7 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
             <MessageContent message={message} isStreaming={isStreaming} />
             <MessageActions
               onEdit={() =>
-                onEdit?.(message.id, formatContentForCopy(message.content))
+                onEdit?.(message.id, formatContentBlocks(message.content))
               }
               onReact={() => onReact(message.id)}
               onCopy={handleCopy}

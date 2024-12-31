@@ -32,9 +32,9 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
 import { useZustandTheme } from "../../store";
-import { Message, FileAttachment, ContentBlock } from "../../types";
+import { Message, FileAttachment } from "../../types";
 import { CodeBlock } from "./CodeBlock";
-import { formatMessageRole } from "./utils";
+import { formatMessageRole, formatContentBlocks } from "./utils";
 import { useStreaming } from "../../hooks/useStreaming";
 
 /**
@@ -114,23 +114,6 @@ const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
 };
 
 /**
- * Formats message content for display, handling both string and ContentBlock[] types
- * @param content - The message content to format
- * @returns Formatted content string
- */
-const formatMessageContent = (content: string | ContentBlock[]): string => {
-  if (typeof content === "string") return content;
-  return content
-    .map((block) => {
-      if (block.image_url) {
-        return `![${block.text || "Image"}](${block.image_url})`;
-      }
-      return block.text || "";
-    })
-    .join("\n");
-};
-
-/**
  * MessageContent component renders the main content of a chat message
  * including markdown, code blocks, attachments, and reactions
  * @component
@@ -189,13 +172,13 @@ export const MessageContent: React.FC<MessageContentProps> = ({
         );
       },
     }),
-    [isStreaming],
+    [isStreaming]
   );
 
   // Format message content for display
   const displayContent = useMemo(
-    () => formatMessageContent(message.content),
-    [message.content],
+    () => formatContentBlocks(message.content),
+    [message.content]
   );
 
   return (
