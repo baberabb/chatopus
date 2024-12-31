@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT COUNT(*) as count \n            FROM conversations c\n            WHERE c.id = ? \n            AND EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversations')\n            AND (\n                EXISTS (SELECT 1 FROM messages WHERE conversation_id = c.id)\n                OR c.created_at > datetime('now', '-1 hour')\n            )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "count",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c1e30b2f7c112fdb28fc105bd1b5a513ffed4a7b7e0122912bb2858f004c018e"
+}

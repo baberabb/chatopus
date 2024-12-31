@@ -18,8 +18,8 @@ pub struct ConversationInfo {
     pub model: String,
     pub message_count: i64,
     pub timestamp: String,
-    pub parent_id: Option<i64>, // Added for versioning
-    pub version: i64,           // Added for versioning
+    pub parent_id: Option<i64>,
+    pub version: i64,
     pub system_message: Option<String>,
 }
 
@@ -34,19 +34,19 @@ pub struct DbMessage {
     pub content: String, // JSON string of Vec<ContentBlock>
     pub created_at: String,
     pub metadata: Option<String>,
-    pub original_message_id: Option<i64>, // Added for versioning
+    pub original_message_id: Option<i64>,
 }
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct ConversationRow {
     pub id: i64,
-    pub title: String,   // COALESCE ensures non-null
-    pub preview: String, // COALESCE ensures non-null
-    pub model: String,   // COALESCE ensures non-null
+    pub title: String,
+    pub preview: String,
+    pub model: String,
     pub message_count: i64,
-    pub timestamp: String,      // COALESCE ensures non-null
-    pub parent_id: Option<i64>, // Added for versioning
-    pub version: i64,           // Added for versioning
+    pub timestamp: String,
+    pub parent_id: Option<i64>,
+    pub version: i64,
     pub system_message: Option<String>,
 }
 
@@ -56,12 +56,10 @@ impl From<DbMessage> for Message {
             .map(|dt| dt.with_timezone(&Local).format("%I:%M %p").to_string())
             .unwrap_or_else(|_| Local::now().format("%I:%M %p").to_string());
 
-        // Parse metadata if it exists
         let metadata = db_msg
             .metadata
             .and_then(|m| serde_json::from_str::<serde_json::Value>(&m).ok());
 
-        // Extract model from metadata if it exists
         let model = metadata.as_ref().and_then(|v| {
             let json_value: &serde_json::Value = v;
             json_value
@@ -70,7 +68,6 @@ impl From<DbMessage> for Message {
                 .map(String::from)
         });
 
-        // Parse content as Vec<ContentBlock>, fallback to text block if parsing fails
         let content =
             serde_json::from_str::<Vec<ContentBlock>>(&db_msg.content).unwrap_or_else(|_| {
                 vec![ContentBlock {
@@ -100,31 +97,101 @@ pub fn db_error(e: sqlx::Error) -> ErrorResponse {
     }
 }
 
+/// Creates a new conversation and returns its ID.
+/// This is the single source of truth for conversation creation.
+pub async fn create_conversation(
+    db: &sqlx::Pool<sqlx::Sqlite>,
+    parent_id: Option<i64>,
+) -> Result<i64, ErrorResponse> {
+    let mut tx = db.begin().await.map_err(db_error)?;
+
+    // Get parent info if this is a version
+    let (version, model_id, settings, system_message) = if let Some(parent_id) = parent_id {
+        let parent = sqlx::query!(
+            r#"
+            SELECT model_id, settings, version, system_message
+            FROM conversations 
+            WHERE id = ?
+            "#,
+            parent_id
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_error)?;
+
+        (
+            parent.version + 1,
+            parent.model_id,
+            parent.settings,
+            parent.system_message,
+        )
+    } else {
+        (1, None, None, None)
+    };
+
+    // Create new conversation
+    sqlx::query!(
+        r#"
+        INSERT INTO conversations (
+            parent_id,
+            version,
+            model_id,
+            settings,
+            system_message,
+            created_at,
+            updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        "#,
+        parent_id,
+        version,
+        model_id,
+        settings,
+        system_message,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(db_error)?;
+
+    let new_id = sqlx::query_scalar!("SELECT last_insert_rowid()")
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_error)?;
+
+    tx.commit().await.map_err(db_error)?;
+
+    Ok(new_id)
+}
+
 /// Gets a valid conversation ID, creating one if necessary.
-/// This is the single source of truth for conversation state.
+/// This function handles conversation caching and versioning.
 pub async fn get_or_create_conversation_cached(app_state: &AppState) -> Result<i64, ErrorResponse> {
     let db = &app_state.db;
     let mut tx = db.begin().await.map_err(db_error)?;
 
-    // Function to verify conversation exists
-    #[derive(sqlx::FromRow)]
-    struct Exists {
-        exists_flag: i64,
-    }
-
+    // Function to verify conversation exists and is valid
     async fn verify_conversation(
         tx: &mut Transaction<'_, Sqlite>,
         id: i64,
     ) -> Result<bool, ErrorResponse> {
-        let exists = sqlx::query_as!(
-            Exists,
-            r#"SELECT COUNT(*) as "exists_flag!" FROM conversations WHERE id = ? AND EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversations')"#,
+        let exists = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) as count 
+            FROM conversations c
+            WHERE c.id = ? 
+            AND EXISTS (SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversations')
+            AND (
+                EXISTS (SELECT 1 FROM messages WHERE conversation_id = c.id)
+                OR c.created_at > datetime('now', '-1 hour')
+            )
+            "#,
             id
         )
         .fetch_optional(&mut **tx)
         .await
         .map_err(db_error)?;
-        Ok(exists.map_or(false, |e| e.exists_flag > 0))
+
+        Ok(exists.map_or(false, |count| count > 0))
     }
 
     // Try to use cached conversation if it exists and is valid
@@ -146,14 +213,26 @@ pub async fn get_or_create_conversation_cached(app_state: &AppState) -> Result<i
 
     // Try to get latest valid conversation
     let latest = sqlx::query!(
-        r#"SELECT id as "id!" FROM conversations WHERE EXISTS (SELECT 1 FROM messages WHERE conversation_id = conversations.id) ORDER BY updated_at DESC LIMIT 1"#
+        r#"
+        SELECT 
+            c.id as "id!", 
+            COALESCE(
+                (SELECT parent_id FROM conversations WHERE id = c.id),
+                c.id
+            ) as "effective_id!"
+        FROM conversations c
+        WHERE EXISTS (SELECT 1 FROM messages WHERE conversation_id = c.id)
+        ORDER BY c.updated_at DESC
+        LIMIT 1
+        "#
     )
     .fetch_optional(&mut *tx)
     .await
     .map_err(db_error)?;
 
     if let Some(row) = latest {
-        let id = row.id;
+        // Use effective_id which is either the parent_id if it exists, or the conversation's own id
+        let id = row.effective_id;
         tx.commit().await.map_err(db_error)?;
 
         // Update cache
@@ -165,49 +244,15 @@ pub async fn get_or_create_conversation_cached(app_state: &AppState) -> Result<i
         return Ok(id);
     }
 
-    // Create new conversation within transaction
-    sqlx::query!(
-        r#"INSERT INTO conversations (created_at, updated_at) VALUES (datetime('now'), datetime('now'))"#
-    )
-    .execute(&mut *tx)
-    .await
-    .map_err(db_error)?;
-
-    let new_id: i64 = sqlx::query_scalar!("SELECT last_insert_rowid()")
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(db_error)?
-        .into();
-
+    // Create new conversation if none exists
     tx.commit().await.map_err(db_error)?;
+    let new_id = create_conversation(db, None).await?;
 
-    // Update cache with new conversation
+    // Update cache
     {
         let mut guard = app_state.conversation_id.lock();
         *guard = Some(new_id);
     }
-
-    Ok(new_id)
-}
-
-pub async fn create_conversation(db: &sqlx::Pool<sqlx::Sqlite>) -> Result<i64, ErrorResponse> {
-    // Create a new conversation
-    sqlx::query!(
-        r#"
-        INSERT INTO conversations (created_at, updated_at, system_message)
-        VALUES (datetime('now'), datetime('now'), NULL)
-        "#
-    )
-    .execute(db)
-    .await
-    .map_err(db_error)?;
-
-    // Get the new conversation ID
-    let new_id: i64 = sqlx::query_scalar!("SELECT last_insert_rowid()")
-        .fetch_one(db)
-        .await
-        .map_err(db_error)?
-        .into();
 
     Ok(new_id)
 }
@@ -251,8 +296,8 @@ pub async fn get_all_conversations(
         r#"
         SELECT 
             c.id as "id!",
-            c.parent_id as "parent_id?",  -- Added
-            c.version as "version!",       -- Added
+            c.parent_id as "parent_id?",
+            c.version as "version!",
             c.system_message as "system_message?",
             COALESCE(
                 (SELECT content FROM messages 
@@ -290,6 +335,7 @@ pub async fn get_all_conversations(
                 c.created_at
             ) as "timestamp!: String"
         FROM conversations c
+        WHERE c.parent_id IS NULL  -- Only show root conversations
         ORDER BY c.updated_at DESC
         "#
     )
@@ -345,6 +391,21 @@ pub async fn delete_conversation(
     db: &sqlx::Pool<sqlx::Sqlite>,
     conversation_id: i64,
 ) -> Result<(), ErrorResponse> {
+    let mut tx = db.begin().await.map_err(db_error)?;
+
+    // Delete all child conversations first
+    sqlx::query!(
+        r#"
+        DELETE FROM conversations
+        WHERE parent_id = ?
+        "#,
+        conversation_id
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(db_error)?;
+
+    // Then delete the conversation itself
     sqlx::query!(
         r#"
         DELETE FROM conversations
@@ -352,10 +413,11 @@ pub async fn delete_conversation(
         "#,
         conversation_id
     )
-    .execute(db)
+    .execute(&mut *tx)
     .await
     .map_err(db_error)?;
 
+    tx.commit().await.map_err(db_error)?;
     Ok(())
 }
 
@@ -401,16 +463,15 @@ pub async fn save_message(
         metadata,
         original_message_id
     )
-        .execute(&mut **tx)
-        .await
-        .map_err(db_error)?;
+    .execute(&mut **tx)
+    .await
+    .map_err(db_error)?;
 
     // Fetch last inserted message id
     let message_id: i64 = sqlx::query_scalar!("SELECT last_insert_rowid()")
         .fetch_one(&mut **tx)
         .await
-        .map_err(db_error)?
-        .into();
+        .map_err(db_error)?;
 
     let timestamp = Local::now().format("%I:%M %p").to_string();
 
@@ -420,7 +481,7 @@ pub async fn save_message(
     let msg = Message {
         id: message_id.to_string(),
         role: role.to_string(),
-        content: content,
+        content,
         timestamp,
         model: model.map(String::from),
         metadata,
@@ -429,78 +490,4 @@ pub async fn save_message(
     };
 
     Ok(msg)
-}
-
-pub async fn create_conversation_version(
-    tx: &mut Transaction<'_, Sqlite>,
-    parent_id: i64,
-) -> Result<i64, ErrorResponse> {
-    // Get parent conversation info
-    let parent = sqlx::query!(
-        r#"
-        SELECT model_id, settings, version 
-        FROM conversations 
-        WHERE id = ?
-        "#,
-        parent_id
-    )
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(db_error)?;
-
-    let new_version = parent.version + 1;
-
-    // Get system message from parent
-    let parent_system_message = sqlx::query!(
-        r#"SELECT system_message FROM conversations WHERE id = ?"#,
-        parent_id
-    )
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(db_error)?
-    .system_message;
-
-    // Create new version
-    sqlx::query!(
-        r#"
-        INSERT INTO conversations (
-            parent_id, 
-            version, 
-            model_id, 
-            settings,
-            system_message,
-            created_at,
-            updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-        "#,
-        parent_id,
-        new_version,
-        parent.model_id,
-        parent.settings,
-        parent_system_message,
-    )
-    .execute(&mut **tx)
-    .await
-    .map_err(db_error)?;
-
-    // Get and return the ID of the newly inserted conversation
-    let id = sqlx::query!(r#"SELECT last_insert_rowid() as id"#)
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(db_error)?
-        .id;
-
-    Ok(id)
-}
-
-// TODO: HACK
-pub async fn create_new_convo(db: &sqlx::Pool<sqlx::Sqlite>) -> Result<i64, ErrorResponse> {
-    let id = sqlx::query!("INSERT INTO conversations DEFAULT VALUES")
-        .execute(&*db)
-        .await
-        .map_err(|x| x.to_string())
-        .unwrap()
-        .last_insert_rowid();
-    Ok(id)
 }

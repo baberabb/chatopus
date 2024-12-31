@@ -7,8 +7,7 @@ use crate::apimodels::{
     get_provider_registry,
 };
 use crate::config::ConfigState;
-use crate::database::chat::ErrorResponse;
-use crate::database::chat::{self, ConversationInfo};
+use crate::database::chat;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -29,8 +28,8 @@ pub struct ProcessMessageError {
     pub details: Option<String>,
 }
 
-impl From<ErrorResponse> for ProcessMessageError {
-    fn from(error: ErrorResponse) -> Self {
+impl From<chat::ErrorResponse> for ProcessMessageError {
+    fn from(error: chat::ErrorResponse) -> Self {
         ProcessMessageError {
             message: error.message,
             details: error.details,
@@ -101,7 +100,10 @@ pub async fn process_message<R: Runtime>(
     };
 
     // Save user message
-    let mut tx = db.begin().await.map_err(chat::db_error)?;
+    let mut tx = db.begin().await.map_err(|e| chat::ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
     let user_message = chat::save_message(
         &mut tx,
         conversation_id,
@@ -115,7 +117,10 @@ pub async fn process_message<R: Runtime>(
         None,
     )
     .await?;
-    tx.commit().await.map_err(chat::db_error)?;
+    tx.commit().await.map_err(|e| chat::ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
 
     // Get provider from registry
     let registry = get_provider_registry();
@@ -194,7 +199,10 @@ pub async fn process_message<R: Runtime>(
     };
 
     // Save assistant message
-    let mut tx = db.begin().await.map_err(chat::db_error)?;
+    let mut tx = db.begin().await.map_err(|e| chat::ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
     let assistant_message = chat::save_message(
         &mut tx,
         conversation_id,
@@ -204,7 +212,10 @@ pub async fn process_message<R: Runtime>(
         None,
     )
     .await?;
-    tx.commit().await.map_err(chat::db_error)?;
+    tx.commit().await.map_err(|e| chat::ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
 
     // Clear cancellation
     {
@@ -242,7 +253,9 @@ pub async fn clear_chat_history(app_handle: AppHandle) -> std::result::Result<i6
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
-    let new_id = chat::create_conversation(db).await.map_err(|e| e.message)?;
+    let new_id = chat::create_conversation(db, None)
+        .await
+        .map_err(|e| e.message)?;
 
     // Update cached conversation_id
     {
@@ -256,7 +269,7 @@ pub async fn clear_chat_history(app_handle: AppHandle) -> std::result::Result<i6
 #[tauri::command]
 pub async fn get_conversations(
     app_handle: AppHandle,
-) -> std::result::Result<Vec<ConversationInfo>, String> {
+) -> std::result::Result<Vec<chat::ConversationInfo>, String> {
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
     chat::get_all_conversations(db).await.map_err(|e| e.message)
@@ -386,10 +399,11 @@ pub async fn delete_conversation(
     Ok(())
 }
 
-// TODO: HACK: This is a temporary command to create new conversations
 #[tauri::command]
-pub async fn create_new_convos(app_handle: AppHandle) -> Result<i64, String> {
+pub async fn create_conversation(app_handle: AppHandle) -> Result<i64, String> {
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
-    chat::create_new_convo(db).await.map_err(|e| e.message)
+    chat::create_conversation(db, None)
+        .await
+        .map_err(|e| e.message)
 }

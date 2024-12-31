@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT model_id, settings, version \n        FROM conversations \n        WHERE id = ?\n        ",
+  "query": "\n            SELECT model_id, settings, version, system_message\n            FROM conversations \n            WHERE id = ?\n            ",
   "describe": {
     "columns": [
       {
@@ -17,12 +17,22 @@
         "name": "version",
         "ordinal": 2,
         "type_info": "Integer"
+      },
+      {
+        "name": "system_message",
+        "ordinal": 3,
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Right": 1
     },
-    "nullable": [true, true, false]
+    "nullable": [
+      true,
+      true,
+      false,
+      true
+    ]
   },
-  "hash": "d33f508b0fa955f6c20b7ad67f45d98b44490665c24af00f4082aafc41cecd05"
+  "hash": "4fd2d072f22dab90ff25c3d5339e7b8d388a5847a5ae8e65dc2976618e0d9129"
 }

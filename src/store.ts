@@ -4,7 +4,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { logger } from "./utils/logger";
 import {
-  // ChatState,
   ThemeStore,
   ModelStore,
   ModelConfig,
@@ -12,8 +11,6 @@ import {
   Conversation,
   Theme,
   ThemeType,
-  ProviderSettings,
-  ProviderType,
   FileAttachment,
 } from "./types";
 
@@ -44,13 +41,11 @@ listen("stream-complete", () => {
       },
     });
 
-    // Only create new object for the last message
     const updatedMessage = {
       ...lastMessage,
       status: "complete" as const,
     };
 
-    // Create new array with same references except last message
     const updatedMessages = [...messages];
     updatedMessages[lastIndex] = updatedMessage;
 
@@ -66,26 +61,10 @@ listen("stream-complete", () => {
   }
 });
 
-// Selectors for granular state updates
-// const messageSelector = (state: ChatState) => state.messages;
-// const conversationSelector = (state: ChatState) => ({
-//   conversations: state.conversations,
-//   currentConversationId: state.currentConversationId
-// });
-// const systemMessageSelector = (state: ChatState) => state.systemMessage;
-// const errorSelector = (state: ChatState) => state.error;
-// const loadingSelector = (state: ChatState) => state.isLoading;
-
-// Split store into smaller stores for more granular updates
-
 // ----------------------------------------
 // Utility / Helper functions
 // ----------------------------------------
 
-/**
- * Generates a temporary ID for optimistic messages.
- * Example usage: createTempId() => -1, -2, etc.
- */
 function createTempIdGenerator() {
   let tempIdCounter = -1;
   return () => {
@@ -96,16 +75,10 @@ function createTempIdGenerator() {
 
 const generateTempId = createTempIdGenerator();
 
-/**
- * Checks if the given message ID is an optimistic (temporary) ID.
- */
 function isOptimisticMessage(id: number) {
   return id < 0;
 }
 
-/**
- * Creates a generic optimistic message, used for both user and assistant.
- */
 function createOptimisticMessage(
   content: string,
   role: Message["role"],
@@ -144,10 +117,7 @@ interface ChatState {
   systemMessage: string | null;
 
   // Message actions
-  sendMessage: (
-    content: string,
-    attachments?: FileAttachment[],
-  ) => Promise<void>;
+  sendMessage: (content: string, attachments?: FileAttachment[]) => Promise<void>;
   appendStreamChunk: (chunk: string) => void;
   setMessages: (messages: Message[]) => void;
   updateLastMessage: (content: string) => void;
@@ -159,10 +129,7 @@ interface ChatState {
   loadConversation: (id: number) => Promise<void>;
   setCurrentConversationId: (id: number | null) => Promise<void>;
   createConversation: () => Promise<number>;
-  updateConversation: (
-    id: number,
-    updates: Partial<Conversation>,
-  ) => Promise<void>;
+  updateConversation: (id: number, updates: Partial<Conversation>) => Promise<void>;
   deleteConversation: (id: number) => Promise<void>;
 }
 
@@ -191,7 +158,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const providerConfig = config?.providers[config.active_provider];
       const currentModel = providerConfig?.model;
 
-      // Create two optimistic messages: user + assistant
+      // Create optimistic messages
       const userMessage = createOptimisticMessage(
         content,
         "user",
@@ -206,7 +173,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         currentModel,
       );
 
-      // Immediately update the UI with optimistic messages
+      // Update UI with optimistic messages
       set((state) => ({
         messages: [...state.messages, userMessage, assistantMessage],
         error: null,
@@ -226,7 +193,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
       });
 
-      // Update real IDs for both optimistic messages
+      // Update real IDs for optimistic messages
       set((state) => {
         const updatedMessages = state.messages.map((msg) => {
           if (msg.id === userMessage.id) {
@@ -242,6 +209,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           currentConversationId: response.conversation_id,
         };
       });
+
+      // Reload conversations to update metadata
+      await get().loadConversations();
     } catch (error) {
       const errorDetails =
         error instanceof Error ? error.message : JSON.stringify(error);
@@ -251,6 +221,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set((state) => ({
         messages: state.messages.filter((msg) => !isOptimisticMessage(msg.id)),
         error: errorDetails,
+        isStreaming: false,
       }));
     }
   },
@@ -387,31 +358,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       // Ensure the conversation exists
       const { conversations } = get();
-      const conversationExists = conversations.some((c) => c.id === id);
-      if (!conversationExists) {
-        throw new Error("Conversation not found");
-      }
-
-      console.log("Loading conversation:", id);
-
-      // Load messages for the conversation
-      const messages = await invoke<Message[]>("load_conversation_messages", { conversationId: id })
-        .then(msgs => {
-          console.log("Loaded messages:", msgs);
-          return msgs;
-        })
-        .catch(err => {
-          console.error("Failed to load messages:", err);
-          throw err;
-        });
-
-      // Get conversation info from the already loaded conversations list
-      const conversation = get().conversations.find(c => c.id === id);
+      const conversation = conversations.find((c) => c.id === id);
       if (!conversation) {
         throw new Error("Conversation not found");
       }
 
-      console.log("Setting state with:", { messages, id, systemMessage: conversation.systemMessage });
+      // Load messages
+      const messages = await invoke<Message[]>("load_conversation_messages", {
+        conversationId: id,
+      });
 
       set({
         messages,
@@ -419,6 +374,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         systemMessage: conversation.systemMessage || null,
         isLoading: false,
         error: null,
+        isStreaming: false, // Reset streaming state when loading new conversation
       });
     } catch (error) {
       const errorMessage =
@@ -435,45 +391,44 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   setCurrentConversationId: async (id: number | null) => {
+    // Don't reload if already on this conversation
     if (id === get().currentConversationId) return;
 
+    // Clear current conversation state
     set({
-      currentConversationId: id,
+      currentConversationId: null,
+      messages: [],
+      systemMessage: null,
       error: null,
+      isStreaming: false,
     });
 
     if (id) {
       try {
-        set({ isLoading: true });
         await get().loadConversation(id);
       } catch {
         // Error is already set in loadConversation
-        set({ currentConversationId: null });
       }
-    } else {
-      // Clear messages if no conversation
-      set({ messages: [] });
     }
   },
 
   createConversation: async () => {
     try {
+      // Clear current conversation state
       set({
         currentConversationId: null,
         messages: [],
         error: null,
         systemMessage: null,
         isLoading: true,
+        isStreaming: false,
       });
 
       // Create new conversation
-      const newId = await invoke<number>("create_new_convos");
-      console.log("New conversation ID:", newId);
+      const newId = await invoke<number>("create_conversation");
 
-      // Reload all conversations so the new one is included
+      // Reload conversations to include the new one
       const conversations = await invoke<Conversation[]>("get_conversations");
-      console.log("All conversations:", conversations);
-
       const newConversation = conversations.find((c) => c.id === newId);
       if (!newConversation) {
         throw new Error("Failed to find newly created conversation");
@@ -482,10 +437,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set((state) => ({
         conversations: [newConversation, ...state.conversations],
         currentConversationId: newId,
-        messages: [],
-        systemMessage: null,
         isLoading: false,
-        error: null,
       }));
 
       return newId;
@@ -506,12 +458,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await invoke("update_conversation", { id, updates });
 
-      // If systemMessage changed, update local store
+      // Update system message in local state if changed
       if ("systemMessage" in updates) {
         set({ systemMessage: updates.systemMessage || null });
       }
 
-      // Reload conversation list only if metadata changed
+      // Reload conversations if metadata changed
       const metadataChanged = Object.keys(updates).some(
         (key) => key !== "systemMessage" && key !== "messages",
       );
@@ -524,22 +476,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ? error.message
           : "Failed to update conversation";
       set({ error: errorMsg });
+      throw error;
     }
   },
 
   deleteConversation: async (id: number) => {
-    // Clear local state if we're deleting the current conversation
-    if (id === get().currentConversationId) {
-      set({
-        currentConversationId: null,
-        messages: [],
-        error: null,
-        systemMessage: null,
-      });
-    }
+    try {
+      // Clear local state if deleting current conversation
+      if (id === get().currentConversationId) {
+        set({
+          currentConversationId: null,
+          messages: [],
+          error: null,
+          systemMessage: null,
+          isStreaming: false,
+        });
+      }
 
-    await invoke("delete_conversation", { conversationId: id });
-    await get().loadConversations();
+      await invoke("delete_conversation", { conversationId: id });
+      await get().loadConversations();
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error
+          ? error.message
+          : "Failed to delete conversation";
+      set({ error: errorMsg });
+      throw error;
+    }
   },
 }));
 

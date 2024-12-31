@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT \n            c.id as \"id!\", \n            COALESCE(\n                (SELECT parent_id FROM conversations WHERE id = c.id),\n                c.id\n            ) as \"effective_id!\"\n        FROM conversations c\n        WHERE EXISTS (SELECT 1 FROM messages WHERE conversation_id = c.id)\n        ORDER BY c.updated_at DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "effective_id!",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "ae477dc2f306c1d138d4fbf634660e4eeb11c1522a65ca837e37fc66d646d819"
+}
