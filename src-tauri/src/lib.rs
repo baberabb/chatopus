@@ -170,10 +170,7 @@ pub fn run() {
                 .map_err(|e| format!("Failed to access store: {}", e))?;
 
             let loaded_config = match store.get("config") {
-                Some(stored_config) => match serde_json::from_value(stored_config.clone()) {
-                    Ok(config_value) => config_value,
-                    Err(_) => config::AppConfig::default(),
-                },
+                Some(stored_config) => serde_json::from_value(stored_config.clone()).unwrap_or_else(|_| config::AppConfig::default()),
                 None => config::AppConfig::default(),
             };
 
