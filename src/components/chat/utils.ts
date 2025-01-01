@@ -114,13 +114,15 @@ export const scrollToBottom = (
 /**
  * Helper function to format content blocks or parse stringified content blocks
  */
-export const formatContentBlocks = (content: string | ContentBlock[]): string => {
+export const formatContentBlocks = (
+  content: string | ContentBlock[],
+): string => {
   if (typeof content === "string") {
     try {
       // Try to parse as JSON first in case it's a stringified ContentBlock array
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed)) {
-        return parsed.map(block => block.text || "").join("\n");
+        return parsed.map((block) => block.text || "").join("\n");
       }
       return content;
     } catch {

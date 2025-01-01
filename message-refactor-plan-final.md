@@ -697,7 +697,7 @@ const useChatStore = create<ChatState>((set, get) => ({
       // Remove optimistic messages on error
       set((state) => ({
         messages: state.messages.filter(
-          (msg) => msg.id !== userMessageId && msg.id !== assistantMessageId
+          (msg) => msg.id !== userMessageId && msg.id !== assistantMessageId,
         ),
         error: error.message,
       }));

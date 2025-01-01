@@ -19,7 +19,7 @@ interface ExecutionResult {
 }
 
 /**
- * Executes code in different languages using Pyodide for Python (browser-side) 
+ * Executes code in different languages using Pyodide for Python (browser-side)
  * or Tauri's invoke for other languages
  * @param code - The code to execute
  * @param language - The programming language
@@ -29,14 +29,14 @@ interface ExecutionResult {
 const executeCode = async (
   code: string,
   language: string,
-  executePython?: (code: string) => Promise<ExecutionResult>
+  executePython?: (code: string) => Promise<ExecutionResult>,
 ): Promise<ExecutionResult> => {
   try {
     switch (language.toLowerCase()) {
       case "python": {
         // Use Pyodide if available, otherwise fall back to Tauri
         if (executePython) {
-          let x= await executePython(code);
+          let x = await executePython(code);
           console.log(x);
           return x;
         } else {
@@ -78,15 +78,19 @@ const executeCode = async (
  */
 export const useCodeExecution = (code: string, language: string) => {
   const [isRunning, setIsRunning] = useState(false);
-  const { executePython, isLoading: isPyodideLoading, error: pyodideError } = usePyodide();
+  const {
+    executePython,
+    isLoading: isPyodideLoading,
+    error: pyodideError,
+  } = usePyodide();
   const [output, setOutput] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const runCode = async () => {
     // Handle Python-specific initialization states
-    if (language.toLowerCase() === 'python') {
+    if (language.toLowerCase() === "python") {
       if (isPyodideLoading) {
-        setError('Please wait, Pyodide is still loading...');
+        setError("Please wait, Pyodide is still loading...");
         return;
       }
       if (pyodideError) {
@@ -108,7 +112,9 @@ export const useCodeExecution = (code: string, language: string) => {
         setError(result.output);
       }
     } catch (err) {
-      setError(`Execution error: ${err instanceof Error ? err.message : String(err)}`);
+      setError(
+        `Execution error: ${err instanceof Error ? err.message : String(err)}`,
+      );
     } finally {
       setIsRunning(false);
     }

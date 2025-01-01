@@ -117,7 +117,10 @@ interface ChatState {
   systemMessage: string | null;
 
   // Message actions
-  sendMessage: (content: string, attachments?: FileAttachment[]) => Promise<void>;
+  sendMessage: (
+    content: string,
+    attachments?: FileAttachment[],
+  ) => Promise<void>;
   appendStreamChunk: (chunk: string) => void;
   setMessages: (messages: Message[]) => void;
   updateLastMessage: (content: string) => void;
@@ -129,7 +132,10 @@ interface ChatState {
   loadConversation: (id: number) => Promise<void>;
   setCurrentConversationId: (id: number | null) => Promise<void>;
   createConversation: () => Promise<number>;
-  updateConversation: (id: number, updates: Partial<Conversation>) => Promise<void>;
+  updateConversation: (
+    id: number,
+    updates: Partial<Conversation>,
+  ) => Promise<void>;
   deleteConversation: (id: number) => Promise<void>;
 }
 
