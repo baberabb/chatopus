@@ -108,18 +108,24 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
   // Use specific selectors to avoid unnecessary rerenders
   const conversations = useChatStore((state) => state.conversations);
   const currentConversationId = useChatStore(
-    (state) => state.currentConversationId
+    (state) => state.currentConversationId,
   );
   const isLoading = useChatStore((state) => state.isLoading);
   const error = useChatStore((state) => state.error);
   const initialized = useChatStore((state) => state.initialized);
   const setCurrentConversationId = useChatStore(
-    (state) => state.setCurrentConversationId
+    (state) => state.setCurrentConversationId,
   );
   const loadConversations = useChatStore((state) => state.loadConversations);
-  const loadConversation = useChatStore((state) => state.loadConversation);
+  // const loadConversation = useChatStore((state) => state.loadConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
   const createConversation = useChatStore((state) => state.createConversation);
+
+  // TODO: Empty dependency
+  // Load conversations on mount
+  React.useEffect(() => {
+    loadConversations();
+  }, []); // Empty dependency array since loadConversations is stable from store
 
   // Show loading state while store is initializing
   if (!initialized) {
@@ -134,11 +140,6 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
       </Sidebar>
     );
   }
-
-  // Load conversations on mount
-  React.useEffect(() => {
-    loadConversations();
-  }, []); // Empty dependency array since loadConversations is stable from store
 
   const handleChatSelect = async (chatId: number) => {
     try {
