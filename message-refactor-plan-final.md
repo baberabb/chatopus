@@ -1276,7 +1276,7 @@ interface StreamingState {
 }
 
 ````
-```rust
+```typescript jsx
 // Global state management with React Query
 export const useStreamingState = () => {
   return useQuery({
