@@ -1,3 +1,22 @@
+/**
+ * store.ts
+ * Central state management using Zustand for the chat application.
+ * 
+ * Architecture Overview:
+ * - ChatStore: Manages chat messages, conversations, and streaming state
+ * - ThemeStore: Handles light/dark theme switching and CSS variable management
+ * - ModelStore: Controls AI model configuration and provider settings
+ * 
+ * Key Features:
+ * - Real-time message streaming with optimistic updates
+ * - Persistent conversation management
+ * - Theme switching with CSS variable injection
+ * - Model configuration with provider-specific settings
+ * 
+ * The store uses Tauri's IPC bridge to communicate with the Rust backend
+ * for data persistence and AI model interaction.
+ */
+
 import { create } from "zustand";
 import { initializeStore, themes } from "./store/initStore";
 import { invoke } from "@tauri-apps/api/core";
@@ -14,7 +33,16 @@ import {
   FileAttachment,
 } from "./types";
 
-// Handle stream events
+/**
+ * Stream Event Handlers
+ * 
+ * The application uses a streaming architecture for real-time message updates:
+ * 1. Messages are created optimistically with temporary IDs
+ * 2. Content is streamed chunk by chunk from the backend
+ * 3. Temporary IDs are replaced with permanent IDs once streaming completes
+ */
+
+// Handles incoming message chunks during streaming
 listen("stream-response", (event) => {
   const chunk = event.payload as string;
   const lastMessage =
@@ -26,7 +54,7 @@ listen("stream-response", (event) => {
   }
 });
 
-// Handle stream completion
+// Handles stream completion by updating message status and cleaning up state
 listen("stream-complete", () => {
   const messages = useChatStore.getState().messages;
   const lastIndex = messages.length - 1;
@@ -65,6 +93,13 @@ listen("stream-complete", () => {
 // Utility / Helper functions
 // ----------------------------------------
 
+/**
+ * Utility functions for message management:
+ * - Temporary ID generation for optimistic updates
+ * - Message creation with proper typing
+ * - Helper functions for message state management
+ */
+
 function createTempIdGenerator() {
   let tempIdCounter = -1;
   return () => {
@@ -98,8 +133,18 @@ function createOptimisticMessage(
 }
 
 // ----------------------------------------
-// Zustand Store
+// Zustand Store Implementation
 // ----------------------------------------
+
+/**
+ * Core store interface defining the chat application state and actions.
+ * Organized into logical sections:
+ * - Core message state: Current messages, loading states, and errors
+ * - Conversation metadata: List of conversations and current selection
+ * - System message state: Special system-level instructions
+ * - Message actions: Functions for sending, updating, and managing messages
+ * - Conversation actions: CRUD operations for conversations
+ */
 
 interface ChatState {
   // Core message state
@@ -139,6 +184,16 @@ interface ChatState {
   deleteConversation: (id: number) => Promise<void>;
 }
 
+/**
+ * ChatStore: Primary store for managing chat functionality
+ * 
+ * Key Features:
+ * - Optimistic updates for instant UI feedback
+ * - Real-time message streaming support
+ * - Error handling and recovery
+ * - Conversation management with persistence
+ * - System message support for AI context
+ */
 export const useChatStore = create<ChatState>((set, get) => ({
   // --------------------------------------
   // State initialization
@@ -155,8 +210,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
   systemMessage: null,
 
   // --------------------------------------
-  // Message actions
+  // Message Actions
   // --------------------------------------
+
+  /**
+   * Sends a new message and manages the streaming response lifecycle
+   * 
+   * Implementation steps:
+   * 1. Sets streaming state and gets current model config
+   * 2. Creates optimistic messages:
+   *    - User message with provided content
+   *    - Empty assistant message in streaming state
+   * 3. Updates UI immediately with optimistic messages
+   * 4. Sends message to backend via Tauri bridge
+   * 5. Updates temporary message IDs with permanent ones
+   * 6. Reloads conversations to update metadata
+   * 
+   * Error handling:
+   * - Rolls back optimistic messages on failure
+   * - Updates error state with detailed message
+   * - Resets streaming state
+   * 
+   * @param content - The message text to send
+   * @param attachments - Optional file attachments to include
+   */
   sendMessage: async (content, attachments) => {
     try {
       set({ isStreaming: true });
@@ -232,6 +309,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  /**
+   * Appends a new chunk of streamed content to the current message
+   * 
+   * Implementation details:
+   * 1. Gets current message list and last message
+   * 2. Validates message is in streaming state
+   * 3. Logs current state for debugging
+   * 4. Creates updated message with appended chunk
+   * 5. Updates message list with new content
+   * 6. Maintains streaming state
+   * 7. Logs updated state
+   * 
+   * Only updates if:
+   * - Messages exist in state
+   * - Last message is in streaming status
+   * 
+   * @param chunk - New content to append to current message
+   */
   appendStreamChunk: (chunk: string) => {
     const messages = get().messages;
     const lastIndex = messages.length - 1;
@@ -267,8 +362,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  /**
+   * Directly sets the entire messages array
+   * Used for bulk updates or state resets
+   * 
+   * @param messages - New message array to set
+   */
   setMessages: (messages) => set({ messages }),
 
+  /**
+   * Updates the content of the last message in the list
+   * 
+   * Used for:
+   * - Editing completed messages
+   * - Updating partially streamed content
+   * - Correcting message content
+   * 
+   * Implementation:
+   * 1. Gets current message list
+   * 2. Validates last message exists
+   * 3. Creates updated message with new content
+   * 4. Updates message list preserving order
+   * 
+   * @param content - New content for the last message
+   */
   updateLastMessage: (content: string) => {
     const messages = get().messages;
     const lastIndex = messages.length - 1;
@@ -282,6 +399,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
+  /**
+   * Clears all messages and resets related state
+   * 
+   * Resets:
+   * - Message list to empty
+   * - Error state to null
+   * - System message to null
+   * 
+   * Used when:
+   * - Starting new conversations
+   * - Clearing chat history
+   * - Handling major errors
+   */
   clearMessages: () => {
     set({
       messages: [],
@@ -290,6 +420,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
 
+  /**
+   * Cancels the current streaming message and cleans up state
+   * 
+   * Implementation steps:
+   * 1. Invokes backend cancel command
+   * 2. Resets streaming state
+   * 3. Updates last message if in streaming state:
+   *    - Logs current message state
+   *    - Updates status to error
+   *    - Updates message list
+   *    - Logs final state
+   * 
+   * Error handling:
+   * - Resets streaming state
+   * - Updates error state
+   * - Logs error details
+   * 
+   * Used when:
+   * - User manually cancels generation
+   * - Connection errors occur
+   * - Backend timeout/errors
+   */
   cancelMessage: async () => {
     try {
       await invoke("cancel_message");
@@ -512,6 +664,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 }));
 
+/**
+ * ThemeStore: Manages application theming
+ * 
+ * Features:
+ * - Light/dark theme switching
+ * - CSS variable injection for consistent styling
+ * - Theme persistence in localStorage
+ * - Automatic theme initialization
+ */
 export const useThemeStore = create<ThemeStore>((set) => ({
   themeType: "light",
   theme: themes.light,
@@ -528,6 +689,15 @@ export const useThemeStore = create<ThemeStore>((set) => ({
     }),
 }));
 
+/**
+ * ModelStore: Manages AI model configuration
+ * 
+ * Features:
+ * - Provider configuration management (OpenAI, Anthropic, etc.)
+ * - Model selection and settings persistence
+ * - Provider-specific parameter management
+ * - Active provider switching
+ */
 export const useModelStore = create<ModelStore>((set, get) => ({
   config: null,
   initialized: false,
@@ -598,7 +768,16 @@ const applyTheme = (themeType: ThemeType, theme: Theme) => {
   });
 };
 
-// Initialize stores asynchronously
+/**
+ * Store Initialization
+ * 
+ * Asynchronously initializes all stores on application start:
+ * 1. Loads model configuration from backend
+ * 2. Initializes theme from localStorage or system preference
+ * 3. Loads conversation history
+ * 
+ * Error handling ensures graceful degradation if any initialization fails.
+ */
 (async () => {
   try {
     // Get initial config from backend
@@ -622,7 +801,19 @@ const applyTheme = (themeType: ThemeType, theme: Theme) => {
   }
 })();
 
-// Hooks for accessing specific parts of state
+/**
+ * Custom Hooks
+ * 
+ * Selector hooks for accessing specific parts of state:
+ * - useMessages: Access current chat messages
+ * - useConversations: Access conversation list and selection
+ * - useSystemMessage: Access system-level instructions
+ * - useChatError: Access error state
+ * - useChatLoading: Access loading state
+ * 
+ * These hooks help components access only the state they need,
+ * optimizing re-renders and improving performance.
+ */
 export const useMessages = () =>
   useChatStore((state: ChatState) => state.messages);
 export const useConversations = () =>

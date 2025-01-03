@@ -1,10 +1,37 @@
+/**
+ * useChat.ts
+ * Custom hook that provides chat functionality by coordinating between UI components
+ * and the Zustand store (store.ts).
+ * 
+ * State Management Flow:
+ * 1. Components use this hook to access chat state and actions
+ * 2. Actions are dispatched to the store which handles:
+ *    - Optimistic updates for immediate UI feedback
+ *    - Backend communication via Tauri
+ *    - Message streaming and state updates
+ *    - Error handling and recovery
+ * 3. Store updates trigger re-renders in subscribed components
+ */
+
 import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useChatStore } from "../../store";
 import { findMessageById } from "./utils";
 
+/**
+ * Primary chat hook that coordinates UI state with the Zustand store
+ * 
+ * State Flow:
+ * - Uses specific selectors from useChatStore to minimize re-renders
+ * - Maintains local UI state for message editing
+ * - Coordinates message streaming and cancellation
+ * - Handles conversation management
+ * 
+ * @returns Chat state and actions for use in components
+ */
 export function useChat() {
-  // Use specific selectors to avoid unnecessary rerenders
+  // Selectively subscribe to store state to optimize re-renders
+  // Each selector creates a separate subscription to the store
   const messages = useChatStore((state) => state.messages);
   const conversations = useChatStore((state) => state.conversations);
   const currentConversationId = useChatStore(
@@ -24,7 +51,8 @@ export function useChat() {
   const deleteConversation = useChatStore((state) => state.deleteConversation);
   const setMessages = useChatStore((state) => state.setMessages);
 
-  // Return early if store is not initialized
+  // Prevent component rendering before store initialization
+  // Returns safe default values to avoid undefined errors
   if (!initialized) {
     return {
       messages: [],
@@ -52,7 +80,18 @@ export function useChat() {
   // Local UI state
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
 
-  // Message editing
+  /**
+   * Handles message editing with optimistic updates
+   * 
+   * Flow:
+   * 1. Updates message content optimistically in UI
+   * 2. Sends edit to backend via Tauri
+   * 3. Reloads conversation to sync with backend
+   * 4. Handles errors by reverting optimistic update
+   * 
+   * @param messageId ID of message to edit
+   * @param newContent Updated message content
+   */
   const handleEdit = useCallback(
     async (messageId: number, newContent: string) => {
       try {
@@ -98,7 +137,16 @@ export function useChat() {
     [messages, setMessages, currentConversationId, loadConversation],
   );
 
-  // Start editing
+  /**
+   * Initiates message editing mode
+   * 
+   * State Updates:
+   * - Sets isEditing flag on message
+   * - Updates local editingMessageId state
+   * - Triggers MessageEditor component display
+   * 
+   * @param messageId ID of message to edit
+   */
   const startEdit = useCallback(
     (messageId: number) => {
       const messageIndex = findMessageById(messages, messageId);
@@ -115,7 +163,16 @@ export function useChat() {
     [messages, setMessages],
   );
 
-  // Cancel message
+  /**
+   * Cancels ongoing message streaming
+   * 
+   * Flow:
+   * 1. Signals backend to stop generation
+   * 2. Store handles streaming cleanup:
+   *    - Updates message status
+   *    - Resets streaming state
+   *    - Updates UI accordingly
+   */
   const cancelMessage = useCallback(async () => {
     try {
       await invoke("cancel_message");
@@ -124,7 +181,15 @@ export function useChat() {
     }
   }, []);
 
-  // Clear chat
+  /**
+   * Clears current chat and starts new conversation
+   * 
+   * State Updates:
+   * 1. Creates new conversation in store
+   * 2. Resets message list
+   * 3. Updates conversation list
+   * 4. Sets new conversation as active
+   */
   const clearChat = useCallback(async () => {
     // TODO: what if we're in the middle of a conversation?
     // Should we clear the conversation and messages?
@@ -136,6 +201,7 @@ export function useChat() {
     }
   }, [createConversation, loadConversations]);
 
+  // Expose chat functionality to components
   return {
     // State
     messages,

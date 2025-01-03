@@ -1,13 +1,33 @@
 /**
  * ChatContainer.tsx
- * Main chat interface component that handles message display, input, and streaming functionality.
+ * Main chat interface component that orchestrates the chat UI and state management.
  *
- * Key features:
- * - Displays messages in a scrollable container
- * - Handles message streaming state
- * - Manages auto-scrolling behavior
- * - Supports message editing and reactions
- * - Displays system messages and error states
+ * Store Integration:
+ * 1. Chat State (via useChat):
+ *    - Messages array for display
+ *    - Conversation metadata
+ *    - Loading and error states
+ *    - Message actions (send, edit, cancel)
+ *
+ * 2. Theme State:
+ *    - Current theme type (light/dark)
+ *    - Theme variables for styling
+ *
+ * 3. Model State:
+ *    - Current model configuration
+ *    - Provider settings
+ *
+ * State Flow:
+ * - User input → store.sendMessage → optimistic update → streaming → final state
+ * - Message edits → store.handleEdit → optimistic update → backend sync
+ * - Streaming updates → store events → UI updates
+ *
+ * Key Features:
+ * - Real-time message streaming with optimistic updates
+ * - Auto-scrolling with user override control
+ * - Message editing and reaction support
+ * - Error handling and retry functionality
+ * - System message management
  */
 
 import React, { useRef, useEffect, useState } from "react";
@@ -30,6 +50,18 @@ import { scrollToBottom } from "./utils";
  * @interface StreamingInputProps
  * @property {function} onSend - Callback function to send a new message
  * @property {function} onCancel - Callback function to cancel ongoing message streaming
+ * State Management:
+ * - onSend: Triggers store.sendMessage which:
+ *   1. Creates optimistic messages in store
+ *   2. Updates UI immediately
+ *   3. Sends to backend and streams response
+ *   4. Updates message IDs with permanent ones
+ *
+ * - onCancel: Triggers store.cancelMessage which:
+ *   1. Stops backend generation
+ *   2. Updates message status in store
+ *   3. Cleans up streaming state
+ *   4. Updates UI to show cancellation
  */
 interface StreamingInputProps {
   onSend: (content: string, attachments?: FileAttachment[]) => Promise<void>;
@@ -37,8 +69,12 @@ interface StreamingInputProps {
 }
 
 /**
- * StreamingInput component handles the chat input area and streaming state
- * @component
+ * StreamingInput component manages message input and streaming state
+ *
+ * Store Integration:
+ * - Uses streaming state from store to show loading
+ * - Handles message submission to store
+ * - Manages cancellation state and UI
  */
 const StreamingInput: React.FC<StreamingInputProps> = ({
   onSend,
@@ -62,6 +98,17 @@ const StreamingInput: React.FC<StreamingInputProps> = ({
  * @property {function} onReact - Callback function for message reactions
  * @property {function} onEdit - Callback function for editing messages
  * @property {number | null} conversationId - ID of the current conversation
+ * State Flow:
+ * - Message content from store displayed in UI
+ * - Streaming status controls animation
+ * - Edit mode triggers store update flow
+ * - Reactions update message metadata
+ *
+ * Store Integration:
+ * - Displays message content from store
+ * - Shows streaming state for assistant messages
+ * - Handles message edits through store
+ * - Updates reactions in store (TODO)
  */
 interface StreamingMessageProps {
   message: Message;
@@ -72,8 +119,13 @@ interface StreamingMessageProps {
 }
 
 /**
- * StreamingMessage component handles individual message display and streaming state
- * @component
+ * StreamingMessage component handles individual message rendering and state
+ *
+ * Store Integration:
+ * - Subscribes to message updates from store
+ * - Shows real-time content during streaming
+ * - Manages edit state transitions
+ * - Handles reaction updates
  */
 const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
   ({ message, onReact, onEdit, conversationId, modelName }) => {
@@ -93,8 +145,18 @@ const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
 );
 
 /**
- * Main chat container component that orchestrates the chat interface
- * @component
+ * Main chat container component orchestrating the entire chat interface
+ *
+ * State Management Flow:
+ * 1. Initializes with store state via useChat
+ * 2. Manages local UI state for scrolling
+ * 3. Coordinates between:
+ *    - Message display and updates
+ *    - Input and streaming state
+ *    - Error handling and retries
+ *    - System message management
+ * 4. Updates store through actions
+ * 5. Reflects store changes in UI
  */
 export function ChatContainer() {
   const { theme } = useZustandTheme();
