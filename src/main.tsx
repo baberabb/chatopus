@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createRoot } from "react-dom/client";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { useLenis } from "./hooks/useLenis";
 import "./globals.css";
 import { useZustandTheme, useModelStore } from "./store";
 import { ModelProvider } from "./contexts/ModelContext";
@@ -14,6 +15,9 @@ const LoadingFallback = () => (
 );
 
 const App = () => {
+  // Initialize smooth scrolling
+  useLenis();
+
   const { theme, initialized: themeInitialized } = useZustandTheme();
   const { initialized: modelInitialized } = useModelStore();
 
@@ -29,9 +33,13 @@ const App = () => {
   }
 
   return (
-    <React.Suspense fallback={<LoadingFallback />}>
-      <SidebarLayout />
-    </React.Suspense>
+    <div data-lenis-prevent>
+      <main>
+        <React.Suspense fallback={<LoadingFallback />}>
+          <SidebarLayout />
+        </React.Suspense>
+      </main>
+    </div>
   );
 };
 
@@ -45,7 +53,7 @@ createRoot(rootElement).render(
         <App />
       </ModelProvider>
     </TooltipProvider>
-  </React.StrictMode>,
+  </React.StrictMode>
 );
 
 /* Original layout preserved for reference:

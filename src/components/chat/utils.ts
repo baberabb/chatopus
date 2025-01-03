@@ -81,12 +81,6 @@ export const createTempMessage = (
   };
 };
 
-import gsap from "gsap";
-import ScrollToPlugin from "gsap/ScrollToPlugin";
-
-// Register ScrollToPlugin with GSAP
-gsap.registerPlugin(ScrollToPlugin);
-
 /**
  * Helper function to scroll chat container to bottom
  * @param container - The chat container element
@@ -98,17 +92,10 @@ export const scrollToBottom = (
 ) => {
   if (!container) return;
 
-  const scrollHeight = container.scrollHeight;
-
-  if (smooth) {
-    gsap.to(container, {
-      duration: 0.5,
-      scrollTo: { y: scrollHeight, autoKill: true },
-      ease: "power2.out",
-    });
-  } else {
-    container.scrollTop = scrollHeight;
-  }
+  container.scrollTo({
+    top: container.scrollHeight,
+    behavior: smooth ? 'smooth' : 'auto'
+  });
 };
 
 /**

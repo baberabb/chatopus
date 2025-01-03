@@ -89,7 +89,7 @@ const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
       />
     );
   },
-  (prevProps, nextProps) => prevProps.message === nextProps.message,
+  (prevProps, nextProps) => prevProps.message === nextProps.message
 );
 
 /**
@@ -203,6 +203,7 @@ export function ChatContainer() {
           className="flex-1 min-h-0 overflow-y-auto pt-4 pb-24 chat-messages"
           style={{ backgroundColor: theme.background }}
           ref={messageListRef}
+          data-lenis-prevent
         >
           {isLoading ? (
             <div className="flex justify-center items-center h-full">
