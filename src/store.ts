@@ -69,23 +69,9 @@ listen("stream-complete", () => {
       },
     });
 
-    const updatedMessage = {
-      ...lastMessage,
-      status: "complete" as const,
-    };
-
-    const updatedMessages = [...messages];
-    updatedMessages[lastIndex] = updatedMessage;
-
-    useChatStore.setState({ messages: updatedMessages, isStreaming: false });
-
-    logger.state("Store", {
-      action: "completeStream",
-      messageId: lastMessage.id,
-      after: {
-        messageStatus: updatedMessage.status,
-      },
-    });
+    // Only update isStreaming state for cancellation button
+    // Keep message status as streaming to avoid re-renders
+    useChatStore.setState({ isStreaming: false });
   }
 });
 
@@ -240,14 +226,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const { config } = useModelStore.getState();
       const providerConfig = config?.providers[config.active_provider];
       const currentModel = providerConfig?.model;
+      const currentMessages = get().messages;
 
-      // Create optimistic messages
+      // Create optimistic user message
       const userMessage = createOptimisticMessage(
         content,
         "user",
         "complete",
         attachments,
       );
+
+      // Create optimistic assistant message
       const assistantMessage = createOptimisticMessage(
         "",
         "assistant",
@@ -257,55 +246,72 @@ export const useChatStore = create<ChatState>((set, get) => ({
       );
 
       // Update UI with optimistic messages
-      set((state) => ({
-        messages: [...state.messages, userMessage, assistantMessage],
-        error: null,
-      }));
+      const updatedMessages = [...currentMessages, userMessage, assistantMessage];
+      set({ messages: updatedMessages, error: null });
 
-      // Send message to backend
+      // Send full conversation context to backend
       const response = await invoke<{
         reply: string;
         user_message_id: number;
         assistant_message_id: number;
         conversation_id: number;
-      }>("process_message", {
+      }>("process_conversation", {
         request: {
-          message: content,
+          messages: updatedMessages.map(msg => ({
+            content: typeof msg.content === 'string' ? msg.content : '',
+            role: msg.role,
+            attachments: msg.attachments || [],
+          })),
           conversation_id: get().currentConversationId,
-          attachments: attachments || [],
-        },
+        }
       });
 
-      // Update real IDs for optimistic messages
-      set((state) => {
-        const updatedMessages = state.messages.map((msg) => {
-          if (msg.id === userMessage.id) {
-            return { ...msg, id: response.user_message_id };
-          }
-          if (msg.id === assistantMessage.id) {
-            return { ...msg, id: response.assistant_message_id };
-          }
-          return msg;
-        });
-        return {
-          messages: updatedMessages,
-          currentConversationId: response.conversation_id,
-        };
+      // Get the current state of the streaming message
+      const latestMessages = get().messages;
+      const streamedMessage = latestMessages.find(msg => msg.id === assistantMessage.id);
+      
+      if (!streamedMessage) {
+        throw new Error("Streaming message not found");
+      }
+
+      // Update messages with real IDs while preserving streamed content
+      const finalMessages = latestMessages.map((msg) => {
+        if (msg.id === userMessage.id) {
+          return { ...msg, id: response.user_message_id };
+        }
+        if (msg.id === assistantMessage.id) {
+          return {
+            ...streamedMessage,
+            id: response.assistant_message_id,
+            status: "streaming" as const // Ensure status remains streaming until completion
+          };
+        }
+        return msg;
       });
 
-      // Reload conversations to update metadata
+      set({
+        messages: finalMessages,
+        currentConversationId: response.conversation_id,
+        isStreaming: true // Maintain streaming state
+      });
+
+      // Update conversation list
       await get().loadConversations();
     } catch (error) {
       const errorDetails =
         error instanceof Error ? error.message : JSON.stringify(error);
       console.error("Send message error:", errorDetails);
 
-      // Rollback optimistic messages
-      set((state) => ({
-        messages: state.messages.filter((msg) => !isOptimisticMessage(msg.id)),
-        error: errorDetails,
-        isStreaming: false,
-      }));
+      // Rollback optimistic messages while preserving existing messages
+      set((state) => {
+        const existingMessages = state.messages.filter(msg => !isOptimisticMessage(msg.id));
+        return {
+          messages: existingMessages,
+          error: errorDetails,
+          isStreaming: false,
+          currentConversationId: get().currentConversationId // Preserve conversation ID
+        };
+      });
     }
   },
 
@@ -342,21 +348,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
       });
 
+      // Create new message with updated content
       const updatedMessage = {
         ...lastMessage,
-        content: lastMessage.content + chunk,
+        content: lastMessage.content + chunk
       };
 
+      // Create new messages array with updated message
       const updatedMessages = [...messages];
       updatedMessages[lastIndex] = updatedMessage;
 
-      set({ messages: updatedMessages, isStreaming: true });
+      // Update state with new messages array
+      set({ messages: updatedMessages });
 
+      // Log the updated message content length
+      const updatedContent = lastMessage.content + chunk;
       logger.state("Store", {
         action: "appendStreamChunk",
         messageId: lastMessage.id,
         after: {
-          contentLength: updatedMessage.content.length,
+          contentLength: updatedContent.length,
         },
       });
     }
@@ -459,11 +470,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
         });
 
-        const updatedMessage = { ...lastMessage, status: "error" as const };
+        const updatedMessage = { 
+          ...lastMessage, 
+          content: lastMessage.content, // Preserve content
+          status: "error" as const 
+        };
         const updatedMessages = [...messages];
         updatedMessages[lastIndex] = updatedMessage;
 
-        set({ messages: updatedMessages });
+        set({ 
+          messages: updatedMessages,
+          isStreaming: false,
+          error: null,
+          currentConversationId: get().currentConversationId // Preserve conversation ID
+        });
 
         logger.state("Store", {
           action: "cancelMessage",

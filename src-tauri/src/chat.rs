@@ -46,11 +46,24 @@ impl From<Error> for ProcessMessageError {
     }
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct MessageInput {
+    content: String,
+    role: String,
+    attachments: Option<Vec<crate::attachments::SaveAttachmentRequest>>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ProcessMessageRequest {
     message: String,
     conversation_id: Option<i64>,
     attachments: Option<Vec<crate::attachments::SaveAttachmentRequest>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProcessConversationRequest {
+    messages: Vec<MessageInput>,
+    conversation_id: Option<i64>,
 }
 
 #[derive(Clone)]
@@ -60,6 +73,220 @@ impl Default for CancellationState {
     fn default() -> Self {
         Self(Arc::new(parking_lot::Mutex::new(None)))
     }
+}
+
+#[tauri::command]
+pub async fn process_conversation<R: Runtime>(
+    request: ProcessConversationRequest,
+    app_handle: AppHandle<R>,
+    config_state: State<'_, ConfigState>,
+    cancellation_state: State<'_, CancellationState>,
+    window: Window<R>,
+) -> std::result::Result<Response, ProcessMessageError> {
+    let app_state = app_handle.state::<AppState>();
+    let db = &app_state.db;
+
+    // Get or create conversation ID
+    let conversation_id = if let Some(id) = request.conversation_id {
+        id
+    } else {
+        let new_id = chat::create_conversation(db, None).await?;
+        {
+            let mut guard = app_state.conversation_id.lock();
+            *guard = Some(new_id);
+        }
+        new_id
+    };
+
+    // Get provider configuration
+    let (provider_type, streaming_enabled, provider_settings) = {
+        let config = config_state.0.lock();
+        let provider_settings = config
+            .providers
+            .get(&config.active_provider)
+            .ok_or_else(|| ProcessMessageError {
+                message: "Provider configuration error".to_string(),
+                details: Some("No provider configured".to_string()),
+            })?;
+
+        let streaming = provider_settings
+            .parameters
+            .get("streaming")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        (
+            config.active_provider.clone(),
+            streaming,
+            provider_settings.clone(),
+        )
+    };
+
+    // Save all messages in the conversation
+    let mut tx = db.begin().await.map_err(|e| chat::ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
+    // Get the last two messages (user input and empty assistant message)
+    let user_message = request
+        .messages
+        .iter()
+        .rev()
+        .nth(1)
+        .ok_or_else(|| ProcessMessageError {
+            message: "Invalid message sequence".to_string(),
+            details: None,
+        })?;
+
+    // Save user message
+    let saved_user_message = chat::save_message(
+        &mut tx,
+        conversation_id,
+        &user_message.role,
+        vec![ContentBlock {
+            r#type: "text".to_string(),
+            text: Some(user_message.content.clone()),
+            image_url: None,
+        }],
+        None,
+        None,
+    )
+    .await?;
+
+    // Save any attachments
+    if let Some(attachments) = user_message.clone().attachments {
+        for mut attachment_request in attachments {
+            attachment_request.message_id = saved_user_message.id.parse().unwrap();
+            crate::attachments::save_attachment(app_handle.clone(), attachment_request)
+                .await
+                .map_err(|e| chat::ErrorResponse {
+                    message: "Failed to save attachment".to_string(),
+                    details: Some(e),
+                })?;
+        }
+    }
+
+    tx.commit().await.map_err(|e| chat::ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
+    // Get provider from registry
+    let registry = get_provider_registry();
+    let provider = registry.get_provider(&provider_type)?;
+
+    // Load conversation history
+    let history = chat::get_messages_for_conversation(db, conversation_id).await?;
+
+    // Setup cancellation
+    let (cancel_tx, cancel_rx) = broadcast::channel(1);
+    {
+        let mut cancel_state = cancellation_state.0.lock();
+        *cancel_state = Some(cancel_tx);
+    }
+
+    // Process message with full conversation context
+    let buffer = Arc::new(Mutex::new(Vec::new()));
+    let full_response = if provider.capabilities().supports_streaming && streaming_enabled {
+        let window_clone = window.clone();
+        let buffer_clone = buffer.clone();
+
+        provider
+            .send_message_streaming(
+                history,
+                ProviderOptions {
+                    model: Some(provider_settings.model.clone()),
+                    stream: true,
+                    parameters: Some(provider_settings.parameters.clone()),
+                    ..Default::default()
+                },
+                Box::new(move |chunk| {
+                    {
+                        let mut buffer = buffer_clone.lock().unwrap();
+                        if buffer.is_empty() {
+                            buffer.push(ContentBlock {
+                                r#type: "text".to_string(),
+                                text: Some(chunk.to_string()),
+                                image_url: None,
+                            });
+                        } else {
+                            if let Some(block) = buffer.first_mut() {
+                                if let Some(text) = &mut block.text {
+                                    text.push_str(&chunk);
+                                }
+                            }
+                        }
+                    }
+                    window_clone
+                        .emit("stream-response", chunk)
+                        .map_err(Error::from)
+                }),
+                cancel_rx,
+            )
+            .await?;
+
+        buffer.lock().unwrap().clone()
+    } else {
+        let response = provider
+            .send_message(
+                history,
+                ProviderOptions {
+                    model: Some(provider_settings.model.clone()),
+                    stream: false,
+                    parameters: Some(provider_settings.parameters.clone()),
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        if let Some(text) = response
+            .content
+            .first()
+            .and_then(|block| block.text.as_ref())
+        {
+            window.emit("stream-response", text).map_err(Error::from)?;
+        }
+
+        response.content
+    };
+
+    // Save assistant message
+    let mut tx = db.begin().await.map_err(|e| chat::ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+    let assistant_message = chat::save_message(
+        &mut tx,
+        conversation_id,
+        "assistant",
+        full_response.clone(),
+        Some(&provider_type),
+        None,
+    )
+    .await?;
+    tx.commit().await.map_err(|e| chat::ErrorResponse {
+        message: "Database error".to_string(),
+        details: Some(e.to_string()),
+    })?;
+
+    // Clear cancellation
+    {
+        let mut cancel_state = cancellation_state.0.lock();
+        *cancel_state = None;
+    }
+
+    // Send completion event
+    if let Err(e) = window.emit("stream-complete", &assistant_message.id) {
+        eprintln!("Failed to emit stream complete: {}", e);
+    }
+
+    Ok(Response {
+        reply: full_response,
+        user_message_id: saved_user_message.id.parse::<i64>().unwrap(),
+        assistant_message_id: assistant_message.id.parse::<i64>().unwrap(),
+        conversation_id,
+    })
 }
 
 #[tauri::command]

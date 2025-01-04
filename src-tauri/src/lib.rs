@@ -137,6 +137,7 @@ pub fn run() {
             chat::edit_message,
             chat::update_conversation,
             chat::create_conversation,
+            chat::process_conversation,
             config::get_config,
             config::update_config,
             config::update_provider_settings,
@@ -170,7 +171,8 @@ pub fn run() {
                 .map_err(|e| format!("Failed to access store: {}", e))?;
 
             let loaded_config = match store.get("config") {
-                Some(stored_config) => serde_json::from_value(stored_config.clone()).unwrap_or_else(|_| config::AppConfig::default()),
+                Some(stored_config) => serde_json::from_value(stored_config.clone())
+                    .unwrap_or_else(|_| config::AppConfig::default()),
                 None => config::AppConfig::default(),
             };
 

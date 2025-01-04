@@ -18,7 +18,7 @@ pub struct Attachment {
     pub created_at: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct SaveAttachmentRequest {
     pub message_id: i64,
     pub name: String,
