@@ -102,6 +102,9 @@ function getNextLocalIndex(messages: Message[]): number {
   return maxIndex + 1;
 }
 
+// Counter for generating unique temporary IDs
+let tempIdCounter = -1;
+
 function createMessage(
   content: string,
   role: Message["role"],
@@ -109,10 +112,11 @@ function createMessage(
   status: Message["status"] = "complete",
   attachments?: FileAttachment[],
   model?: string,
-  id: number = -1 // Temporary backend ID until server assigns one
 ): Message {
+  // Generate unique negative ID for temporary messages
+  tempIdCounter--;
   return {
-    id,
+    id: tempIdCounter, // Each new message gets a unique negative ID
     localIndex: getNextLocalIndex(messages),
     role,
     content,
@@ -315,7 +319,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         error instanceof Error ? error.message : JSON.stringify(error);
       console.error("Send message error:", errorDetails);
 
-      // Rollback optimistic messages while preserving existing messages
+      // Reset temp ID counter and rollback optimistic messages
+      tempIdCounter = -1;
+      
       set((state) => {
         const existingMessages = state.messages.filter(msg => msg.id > 0);
         return {
@@ -439,6 +445,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
    * - Handling major errors
    */
   clearMessages: () => {
+    // Reset temp ID counter when clearing messages
+    tempIdCounter = -1;
+    
     set({
       messages: [],
       error: null,
@@ -563,6 +572,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         conversationId: id,
       });
 
+      // Reset temp ID counter when loading new conversation
+      tempIdCounter = -1;
+
       // Assign local indices to loaded messages
       const messagesWithIndices = messages.map((msg, index) => ({
         ...msg,
@@ -595,14 +607,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Don't reload if already on this conversation
     if (id === get().currentConversationId) return;
 
-    // Clear current conversation state
-    set({
-      currentConversationId: null,
-      messages: [],
-      systemMessage: null,
-      error: null,
-      isStreaming: false,
-    });
+      // Reset temp ID counter and clear state when starting new conversation
+      tempIdCounter = -1;
+      
+      // Clear current conversation state
+      set({
+        currentConversationId: null,
+        messages: [],
+        systemMessage: null,
+        error: null,
+        isStreaming: false,
+      });
 
     if (id) {
       try {
