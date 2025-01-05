@@ -5,6 +5,7 @@ import { useLenis } from "./hooks/useLenis";
 import "./globals.css";
 import { useZustandTheme, useModelStore } from "./store";
 import { ModelProvider } from "./contexts/ModelContext";
+import { RightSidebarProvider } from "./contexts/RightSidebarContext";
 
 const SidebarLayout = React.lazy(() => import("./components/sidebar-09"));
 
@@ -50,7 +51,9 @@ createRoot(rootElement).render(
   <React.StrictMode>
     <TooltipProvider>
       <ModelProvider>
-        <App />
+        <RightSidebarProvider>
+          <App />
+        </RightSidebarProvider>
       </ModelProvider>
     </TooltipProvider>
   </React.StrictMode>

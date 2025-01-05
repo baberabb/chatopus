@@ -32,7 +32,8 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { useZustandTheme } from "../../store";
-import { ChevronDown } from "lucide-react";
+import { useRightSidebar } from "../../contexts/RightSidebarContext";
+import { ChevronDown, PanelRightOpen } from "lucide-react";
 import { useStreaming } from "../../hooks/useStreaming";
 import { Message, FileAttachment } from "../../types";
 import { useModel } from "../../contexts/ModelContext";
@@ -161,6 +162,7 @@ const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
 export function ChatContainer() {
   const { theme } = useZustandTheme();
   const { currentModel } = useModel();
+  const { isOpen, setIsOpen } = useRightSidebar();
   const messageListRef = useRef<HTMLDivElement>(null);
   const { isStreaming } = useStreaming();
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -234,8 +236,12 @@ export function ChatContainer() {
   return (
     <ErrorBoundary>
       <div
-        className="flex flex-col h-full"
-        style={{ backgroundColor: theme.background, color: theme.text }}
+        className="flex flex-col h-full transition-[margin] duration-200 ease-linear"
+        style={{
+          backgroundColor: theme.background,
+          color: theme.text,
+          marginRight: isOpen ? "200px" : 0,
+        }}
       >
         {/* Model header */}
         <div
@@ -245,13 +251,25 @@ export function ChatContainer() {
             borderBottom: `1px solid ${theme.border}`,
           }}
         >
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-medium" style={{ color: theme.text }}>
-              {currentModel?.name || "No model selected"}
-            </span>
-            <div style={{ color: theme.text }}>
-              <JupyterConnect />
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-4">
+              <span
+                className="text-sm font-medium"
+                style={{ color: theme.text }}
+              >
+                {currentModel?.name || "No model selected"}
+              </span>
+              <div style={{ color: theme.text }}>
+                <JupyterConnect />
+              </div>
             </div>
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+              aria-label="Toggle Details Panel"
+            >
+              <PanelRightOpen className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
