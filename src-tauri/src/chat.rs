@@ -83,6 +83,7 @@ pub async fn process_conversation<R: Runtime>(
     cancellation_state: State<'_, CancellationState>,
     window: Window<R>,
 ) -> std::result::Result<Response, ProcessMessageError> {
+    println!("Processing conversation: {:#?}", &request);
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 

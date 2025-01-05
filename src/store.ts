@@ -266,6 +266,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
         throw new Error("No active conversation");
       }
 
+      // Get system message if exists
+      const systemMessage = get().systemMessage;
+
+      // Prepare messages array with system message if present
+      const messagesWithSystem = systemMessage
+        ? [
+            {
+              content: systemMessage,
+              role: 'system',
+              attachments: [],
+            },
+            ...updatedMessages.map(msg => ({
+              content: typeof msg.content === 'string' ? msg.content : '',
+              role: msg.role,
+              attachments: msg.attachments || [],
+            }))
+          ]
+        : updatedMessages.map(msg => ({
+            content: typeof msg.content === 'string' ? msg.content : '',
+            role: msg.role,
+            attachments: msg.attachments || [],
+          }));
+
       // Send full conversation context to backend
       const response = await invoke<{
         reply: string;
@@ -274,11 +297,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         conversation_id: number;
       }>("process_conversation", {
         request: {
-          messages: updatedMessages.map(msg => ({
-            content: typeof msg.content === 'string' ? msg.content : '',
-            role: msg.role,
-            attachments: msg.attachments || [],
-          })),
+          messages: messagesWithSystem,
           conversation_id: currentConversationId,
         }
       });
