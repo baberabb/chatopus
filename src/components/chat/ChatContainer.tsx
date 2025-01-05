@@ -278,7 +278,7 @@ export function ChatContainer() {
           ) : (
             messages.map((msg) => (
               <StreamingMessage
-                key={msg.id}
+                key={msg.localIndex}
                 message={msg}
                 onReact={handleReact}
                 onEdit={handleEdit}

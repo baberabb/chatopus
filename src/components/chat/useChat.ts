@@ -16,7 +16,7 @@
 import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useChatStore } from "../../store";
-import { findMessageById } from "./utils";
+import { findMessageByLocalIndex } from "./utils";
 
 /**
  * Primary chat hook that coordinates UI state with the Zustand store
@@ -78,7 +78,7 @@ export function useChat() {
   // const isStreaming = messages[messages.length - 1]?.status === 'streaming';
 
   // Local UI state
-  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [editingLocalIndex, setEditingLocalIndex] = useState<number | null>(null);
 
   /**
    * Handles message editing with optimistic updates
@@ -93,10 +93,12 @@ export function useChat() {
    * @param newContent Updated message content
    */
   const handleEdit = useCallback(
-    async (messageId: number, newContent: string) => {
+    async (localIndex: number, newContent: string) => {
       try {
-        const messageIndex = findMessageById(messages, messageId);
+        const messageIndex = findMessageByLocalIndex(messages, localIndex);
         if (messageIndex === -1) return;
+
+        const message = messages[messageIndex];
 
         // Update message optimistically
         const updatedMessages = [...messages];
@@ -109,10 +111,10 @@ export function useChat() {
 
         // Save to backend
         await invoke("edit_message", {
-          messageId: messageId.toString(),
+          messageId: message.id.toString(),
           newContent,
         });
-        setEditingMessageId(null);
+        setEditingLocalIndex(null);
 
         // Reload conversation to get updated messages
         if (currentConversationId) {
@@ -122,7 +124,7 @@ export function useChat() {
         console.error("Failed to edit message:", error);
 
         // Revert on error
-        const messageIndex = findMessageById(messages, messageId);
+        const messageIndex = findMessageByLocalIndex(messages, localIndex);
         if (messageIndex !== -1) {
           const updatedMessages = [...messages];
           updatedMessages[messageIndex] = {
@@ -131,7 +133,7 @@ export function useChat() {
           };
           setMessages(updatedMessages);
         }
-        setEditingMessageId(null);
+        setEditingLocalIndex(null);
       }
     },
     [messages, setMessages, currentConversationId, loadConversation],
@@ -148,8 +150,8 @@ export function useChat() {
    * @param messageId ID of message to edit
    */
   const startEdit = useCallback(
-    (messageId: number) => {
-      const messageIndex = findMessageById(messages, messageId);
+    (localIndex: number) => {
+      const messageIndex = findMessageByLocalIndex(messages, localIndex);
       if (messageIndex !== -1) {
         const updatedMessages = [...messages];
         updatedMessages[messageIndex] = {
@@ -157,7 +159,7 @@ export function useChat() {
           isEditing: true,
         };
         setMessages(updatedMessages);
-        setEditingMessageId(messageId);
+        setEditingLocalIndex(localIndex);
       }
     },
     [messages, setMessages],
@@ -209,7 +211,7 @@ export function useChat() {
     currentConversationId,
     isLoading,
     error,
-    editingMessageId,
+    editingMessageId: editingLocalIndex,
 
     // Message actions
     sendMessage,

@@ -64,14 +64,24 @@ listen("stream-complete", () => {
     logger.state("Store", {
       action: "completeStream",
       messageId: lastMessage.id,
+      localIndex: lastMessage.localIndex,
       before: {
         messageStatus: lastMessage.status,
       },
     });
 
-    // Only update isStreaming state for cancellation button
-    // Keep message status as streaming to avoid re-renders
-    useChatStore.setState({ isStreaming: false });
+    // Update message status to complete
+    const updatedMessages = [...messages];
+    updatedMessages[lastIndex] = {
+      ...lastMessage,
+      status: "complete" as const
+    };
+
+    // Update state with completed message
+    useChatStore.setState({ 
+      messages: updatedMessages,
+      isStreaming: false 
+    });
   }
 });
 
@@ -81,34 +91,29 @@ listen("stream-complete", () => {
 
 /**
  * Utility functions for message management:
- * - Temporary ID generation for optimistic updates
+ * - Local index tracking per conversation
  * - Message creation with proper typing
  * - Helper functions for message state management
  */
 
-function createTempIdGenerator() {
-  let tempIdCounter = -1;
-  return () => {
-    tempIdCounter--;
-    return tempIdCounter;
-  };
+function getNextLocalIndex(messages: Message[]): number {
+  if (messages.length === 0) return 0;
+  const maxIndex = Math.max(...messages.map(m => m.localIndex));
+  return maxIndex + 1;
 }
 
-const generateTempId = createTempIdGenerator();
-
-function isOptimisticMessage(id: number) {
-  return id < 0;
-}
-
-function createOptimisticMessage(
+function createMessage(
   content: string,
   role: Message["role"],
+  messages: Message[],
   status: Message["status"] = "complete",
   attachments?: FileAttachment[],
   model?: string,
+  id: number = -1 // Temporary backend ID until server assigns one
 ): Message {
   return {
-    id: generateTempId(),
+    id,
+    localIndex: getNextLocalIndex(messages),
     role,
     content,
     timestamp: new Date().toISOString(),
@@ -228,21 +233,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const currentModel = providerConfig?.model;
       const currentMessages = get().messages;
 
-      // Create optimistic user message
-      const userMessage = createOptimisticMessage(
+      // Create user message with next local index
+      const userMessage = createMessage(
         content,
         "user",
+        currentMessages,
         "complete",
-        attachments,
+        attachments
       );
 
-      // Create optimistic assistant message
-      const assistantMessage = createOptimisticMessage(
+      // Create assistant message with next local index
+      const assistantMessage = createMessage(
         "",
         "assistant",
+        [...currentMessages, userMessage],
         "streaming",
         undefined,
-        currentModel,
+        currentModel
       );
 
       // Update UI with optimistic messages
@@ -268,26 +275,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       // Get the current state of the streaming message
       const latestMessages = get().messages;
-      const streamedMessage = latestMessages.find(msg => msg.id === assistantMessage.id);
+      const streamedMessageIndex = latestMessages.findIndex(msg => msg.localIndex === assistantMessage.localIndex);
       
-      if (!streamedMessage) {
+      if (streamedMessageIndex === -1) {
         throw new Error("Streaming message not found");
       }
 
-      // Update messages with real IDs while preserving streamed content
-      const finalMessages = latestMessages.map((msg) => {
-        if (msg.id === userMessage.id) {
-          return { ...msg, id: response.user_message_id };
-        }
-        if (msg.id === assistantMessage.id) {
-          return {
-            ...streamedMessage,
-            id: response.assistant_message_id,
-            status: "streaming" as const // Ensure status remains streaming until completion
-          };
-        }
-        return msg;
-      });
+      const streamedMessage = latestMessages[streamedMessageIndex];
+
+      // Update messages with real backend IDs while preserving local indices
+      const finalMessages = [...latestMessages];
+      
+      // Update user message ID
+      const userMessageIndex = finalMessages.findIndex(msg => msg.localIndex === userMessage.localIndex);
+      if (userMessageIndex !== -1) {
+        finalMessages[userMessageIndex] = {
+          ...finalMessages[userMessageIndex],
+          id: response.user_message_id
+        };
+      }
+
+      // Update assistant message ID
+      finalMessages[streamedMessageIndex] = {
+        ...streamedMessage,
+        id: response.assistant_message_id,
+        status: "streaming" as const // Ensure status remains streaming until completion
+      };
 
       set({
         messages: finalMessages,
@@ -304,7 +317,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       // Rollback optimistic messages while preserving existing messages
       set((state) => {
-        const existingMessages = state.messages.filter(msg => !isOptimisticMessage(msg.id));
+        const existingMessages = state.messages.filter(msg => msg.id > 0);
         return {
           messages: existingMessages,
           error: errorDetails,
@@ -342,6 +355,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       logger.state("Store", {
         action: "appendStreamChunk",
         messageId: lastMessage.id,
+        localIndex: lastMessage.localIndex,
         before: {
           contentLength: lastMessage.content.length,
           chunkLength: chunk.length,
@@ -366,6 +380,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       logger.state("Store", {
         action: "appendStreamChunk",
         messageId: lastMessage.id,
+        localIndex: lastMessage.localIndex,
         after: {
           contentLength: updatedContent.length,
         },
@@ -465,6 +480,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         logger.state("Store", {
           action: "cancelMessage",
           messageId: lastMessage.id,
+          localIndex: lastMessage.localIndex,
           before: {
             messageStatus: lastMessage.status,
           },
@@ -488,6 +504,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         logger.state("Store", {
           action: "cancelMessage",
           messageId: lastMessage.id,
+          localIndex: lastMessage.localIndex,
           after: {
             messageStatus: updatedMessage.status,
           },
@@ -546,8 +563,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         conversationId: id,
       });
 
+      // Assign local indices to loaded messages
+      const messagesWithIndices = messages.map((msg, index) => ({
+        ...msg,
+        localIndex: index
+      }));
+
       set({
-        messages,
+        messages: messagesWithIndices,
         currentConversationId: id,
         systemMessage: conversation.systemMessage || null,
         isLoading: false,

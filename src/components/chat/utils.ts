@@ -57,10 +57,10 @@ export const formatMessageRole = (role: string, model?: string) => {
 };
 
 /**
- * Helper function to find message index by ID
+ * Helper function to find message by local index
  */
-export const findMessageById = (messages: Message[], id: number) => {
-  return messages.findIndex((msg) => msg.id === id);
+export const findMessageByLocalIndex = (messages: Message[], localIndex: number) => {
+  return messages.findIndex((msg) => msg.localIndex === localIndex);
 };
 
 /**
@@ -69,10 +69,16 @@ export const findMessageById = (messages: Message[], id: number) => {
 export const createTempMessage = (
   content: string,
   role: "user" | "assistant",
+  messages: Message[],
   model?: string,
 ): Message => {
+  const nextIndex = messages.length > 0 
+    ? Math.max(...messages.map(m => m.localIndex)) + 1 
+    : 0;
+
   return {
-    id: Date.now(),
+    id: -1, // Temporary ID until backend assigns one
+    localIndex: nextIndex,
     content,
     role,
     model,

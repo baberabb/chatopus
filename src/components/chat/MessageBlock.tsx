@@ -24,8 +24,8 @@ import { formatContentBlocks } from "./utils";
  */
 interface MessageBlockProps {
   message: Message;
-  onReact: (messageId: number) => void;
-  onEdit?: (messageId: number, newContent: string) => void;
+  onReact: (localIndex: number) => void;
+  onEdit?: (localIndex: number, newContent: string) => void;
   conversationId?: number | null;
   isStreaming?: boolean;
   modelName?: string;
@@ -69,7 +69,7 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
 
   return (
     <div
-      data-message-id={message.id}
+      data-message-index={message.localIndex}
       className="flex hover:bg-opacity-50 transition-colors duration-200 py-3 px-4 hover:bg-transparent"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -93,9 +93,9 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
         {message.isEditing ? (
           <MessageEditor
             content={formatContentBlocks(message.content)}
-            onSave={(content) => onEdit?.(message.id, content)}
+            onSave={(content) => onEdit?.(message.localIndex, content)}
             onCancel={() =>
-              onEdit?.(message.id, formatContentBlocks(message.content))
+              onEdit?.(message.localIndex, formatContentBlocks(message.content))
             }
           />
         ) : (
@@ -103,9 +103,12 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
             <MessageContent message={message} isStreaming={isStreaming} />
             <MessageActions
               onEdit={() =>
-                onEdit?.(message.id, formatContentBlocks(message.content))
+                onEdit?.(
+                  message.localIndex,
+                  formatContentBlocks(message.content)
+                )
               }
-              onReact={() => onReact(message.id)}
+              onReact={() => onReact(message.localIndex)}
               onCopy={handleCopy}
               isVisible={shouldShowActions}
             />
