@@ -35,6 +35,7 @@ import {
 } from "./ui/sidebar";
 import { Switch } from "./ui/switch";
 import { ChatContainer } from "./chat/ChatContainer";
+import { RightSidebar } from "./RightSidebar";
 import { SidebarNavigation } from "./SidebarNavigation";
 import { TrashContent } from "./TrashContent";
 import Settings from "./settings/Settings";
@@ -75,7 +76,7 @@ export default function Page() {
       <ErrorBoundary>
         <AppSidebar setActiveContent={setActiveContent} />
       </ErrorBoundary>
-      <SidebarInset className="flex flex-col h-[calc(100vh-64px)]">
+      <SidebarInset className="flex flex-col h-[calc(100vh-64px)] relative">
         {activeContent === "inbox" ? (
           <ChatContainer />
         ) : activeContent === "trash" ? (
@@ -93,6 +94,7 @@ export default function Page() {
         ) : (
           <Settings />
         )}
+        <RightSidebar />
       </SidebarInset>
     </SidebarProvider>
   );
@@ -108,13 +110,13 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
   // Use specific selectors to avoid unnecessary rerenders
   const conversations = useChatStore((state) => state.conversations);
   const currentConversationId = useChatStore(
-    (state) => state.currentConversationId,
+    (state) => state.currentConversationId
   );
   const isLoading = useChatStore((state) => state.isLoading);
   const error = useChatStore((state) => state.error);
   const initialized = useChatStore((state) => state.initialized);
   const setCurrentConversationId = useChatStore(
-    (state) => state.setCurrentConversationId,
+    (state) => state.setCurrentConversationId
   );
   const loadConversations = useChatStore((state) => state.loadConversations);
   // const loadConversation = useChatStore((state) => state.loadConversation);
