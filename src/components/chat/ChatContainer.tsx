@@ -33,7 +33,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { useZustandTheme } from "../../store";
 import { useRightSidebar } from "../../contexts/RightSidebarContext";
-import { ChevronDown, PanelRightOpen } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useStreaming } from "../../hooks/useStreaming";
 import { Message, FileAttachment } from "../../types";
 import { useModel } from "../../contexts/ModelContext";
@@ -251,25 +251,13 @@ export function ChatContainer() {
             borderBottom: `1px solid ${theme.border}`,
           }}
         >
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-4">
-              <span
-                className="text-sm font-medium"
-                style={{ color: theme.text }}
-              >
-                {currentModel?.name || "No model selected"}
-              </span>
-              <div style={{ color: theme.text }}>
-                <JupyterConnect />
-              </div>
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-medium" style={{ color: theme.text }}>
+              {currentModel?.name || "No model selected"}
+            </span>
+            <div style={{ color: theme.text }}>
+              <JupyterConnect />
             </div>
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
-              aria-label="Toggle Details Panel"
-            >
-              <PanelRightOpen className="w-4 h-4" />
-            </button>
           </div>
         </div>
 

@@ -2,7 +2,11 @@ import React, { createContext, useContext, useState } from "react";
 
 interface RightSidebarContextType {
   isOpen: boolean;
+  isPinned: boolean;
   setIsOpen: (open: boolean) => void;
+  setPinned: (pinned: boolean) => void;
+  onHoverStart: () => void;
+  onHoverEnd: () => void;
 }
 
 const RightSidebarContext = createContext<RightSidebarContextType | undefined>(
@@ -15,9 +19,31 @@ export function RightSidebarProvider({
   children: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isPinned, setPinned] = useState(false);
+
+  const onHoverStart = () => {
+    if (!isPinned) {
+      setIsOpen(true);
+    }
+  };
+
+  const onHoverEnd = () => {
+    if (!isPinned) {
+      setIsOpen(false);
+    }
+  };
 
   return (
-    <RightSidebarContext.Provider value={{ isOpen, setIsOpen }}>
+    <RightSidebarContext.Provider
+      value={{
+        isOpen,
+        isPinned,
+        setIsOpen,
+        setPinned,
+        onHoverStart,
+        onHoverEnd,
+      }}
+    >
       {children}
     </RightSidebarContext.Provider>
   );
