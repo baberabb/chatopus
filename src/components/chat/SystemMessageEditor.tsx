@@ -35,11 +35,18 @@ export function SystemMessageEditor({ disabled }: SystemMessageEditorProps) {
     return null;
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (currentConversationId) {
-      updateConversation(currentConversationId, { systemMessage: editValue });
+      try {
+        // Keep empty string as empty string, don't convert to null
+        await updateConversation(currentConversationId, {
+          systemMessage: editValue.trim(),
+        });
+        setIsEditing(false);
+      } catch (error) {
+        console.error("Failed to update system message:", error);
+      }
     }
-    setIsEditing(false);
   };
 
   return (

@@ -50,7 +50,7 @@ export interface Conversation {
   model: string;
   messageCount: number;
   timestamp: string;
-  systemMessage?: string;
+  systemMessage?: string | null;
 }
 
 // Provider types

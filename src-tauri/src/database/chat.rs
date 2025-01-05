@@ -386,8 +386,16 @@ pub async fn update_conversation(
 ) -> Result<(), ErrorResponse> {
     let mut tx = db.begin().await.map_err(db_error)?;
 
+    println!("Database updates: {:?}", updates);
     // Extract fields from updates
-    if let Some(system_message) = updates.get("systemMessage").and_then(|v| v.as_str()) {
+    if let Some(system_message) = updates.get("systemMessage") {
+        println!("Found system message value: {:?}", system_message);
+        let system_message = if system_message.is_null() {
+            None
+        } else {
+            Some(system_message.as_str().unwrap_or_default())
+        };
+        println!("Converted system message: {:?}", system_message);
         sqlx::query!(
             r#"
             UPDATE conversations

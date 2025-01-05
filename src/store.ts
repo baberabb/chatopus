@@ -672,7 +672,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   updateConversation: async (id: number, updates: Partial<Conversation>) => {
     try {
-      await invoke("update_conversation", { id, updates });
+      // Transform updates to match backend expectations
+      console.log('System message update:', updates.systemMessage);
+      
+      const backendUpdates = {
+        systemMessage: updates.systemMessage === undefined ? null : updates.systemMessage
+      };
+      
+      console.log('Sending to backend:', backendUpdates);
+      
+      await invoke("update_conversation", { 
+        conversationId: id,
+        updates: backendUpdates 
+      });
 
       // Update system message in local state if changed
       if ("systemMessage" in updates) {

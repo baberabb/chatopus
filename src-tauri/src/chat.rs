@@ -648,12 +648,17 @@ pub async fn update_conversation(
     updates: serde_json::Value,
     app_handle: AppHandle,
 ) -> std::result::Result<(), String> {
+    println!("Received updates: {:?}", updates);
+
     let app_state = app_handle.state::<AppState>();
     let db = &app_state.db;
 
     chat::update_conversation(db, conversation_id, updates)
         .await
-        .map_err(|e| e.message)
+        .map_err(|e| {
+            println!("Update error: {:?}", e);
+            e.message
+        })
 }
 
 #[tauri::command]
