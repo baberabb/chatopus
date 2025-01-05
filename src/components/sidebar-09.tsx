@@ -66,7 +66,7 @@ export default function Page() {
       defaultOpen={false}
       style={
         {
-          "--sidebar-width": "350px",
+          "--sidebar-width": "250px",
           backgroundColor: theme.background,
           color: theme.text,
           "--border-color": theme.border,
@@ -311,7 +311,7 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
                         <span>{chat.messageCount} messages</span>
                       </div>
                       <span
-                        className="line-clamp-2 w-[260px] whitespace-break-spaces text-xs"
+                        className="line-clamp-2 w-[200px] whitespace-break-spaces text-xs"
                         style={{ color: theme.textSecondary }}
                       >
                         {formatContentBlocks(chat.preview) || ""}

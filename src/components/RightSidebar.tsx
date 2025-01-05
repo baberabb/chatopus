@@ -10,10 +10,13 @@ export function RightSidebar() {
       side="right"
       collapsible="offcanvas"
       className="hidden md:flex"
-      style={{
-        backgroundColor: theme.surface,
-        borderColor: theme.border,
-      }}
+      style={
+        {
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          "--sidebar-width": "200px",
+        } as React.CSSProperties
+      }
     >
       <SidebarHeader
         className="border-b p-4"
