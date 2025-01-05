@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Paperclip, Zap, CornerRightUp, XCircle, X } from "lucide-react";
 import { useZustandTheme } from "../../store";
+import { useRightSidebar } from "../../contexts/RightSidebarContext";
 import { FileAttachment } from "../../types";
 
 interface InputAreaProps {
@@ -47,6 +48,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({
 export const InputArea: React.FC<InputAreaProps> = React.memo(
   ({ onSend, isStreaming, isCancellable, onCancel }) => {
     const { theme } = useZustandTheme();
+    const { isOpen } = useRightSidebar();
     const [attachments, setAttachments] = useState<FileAttachment[]>([]);
     const [input, setInput] = useState("");
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -74,7 +76,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
             url,
             previewUrl,
           };
-        }),
+        })
       );
 
       setAttachments((prev) => [...prev, ...newAttachments]);
@@ -130,7 +132,13 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
     }, [isStreaming]);
 
     return (
-      <div className="absolute bottom-0 left-0 right-0 px-4 pb-2">
+      <div
+        className="absolute bottom-0 left-0 right-0 px-4 pb-2"
+        style={{
+          right: isOpen ? "200px" : 0,
+          transition: "right 200ms linear",
+        }}
+      >
         {attachments.length > 0 && (
           <div
             className="flex flex-wrap gap-2 p-2 mb-2 rounded-lg"
@@ -225,7 +233,7 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
         </form>
       </div>
     );
-  },
+  }
 );
 
 InputArea.displayName = "InputArea";
