@@ -260,6 +260,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const updatedMessages = [...currentMessages, userMessage, assistantMessage];
       set({ messages: updatedMessages, error: null });
 
+      // Get current conversation ID
+      const currentConversationId = get().currentConversationId;
+      if (!currentConversationId) {
+        throw new Error("No active conversation");
+      }
+
       // Send full conversation context to backend
       const response = await invoke<{
         reply: string;
@@ -273,7 +279,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             role: msg.role,
             attachments: msg.attachments || [],
           })),
-          conversation_id: get().currentConversationId,
+          conversation_id: currentConversationId,
         }
       });
 
@@ -308,7 +314,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set({
         messages: finalMessages,
-        currentConversationId: response.conversation_id,
         isStreaming: true // Maintain streaming state
       });
 
@@ -640,8 +645,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         isStreaming: false,
       });
 
-      // Create new conversation
+      // Create new conversation and immediately set its ID
       const newId = await invoke<number>("create_conversation");
+      set({ currentConversationId: newId });
 
       // Reload conversations to include the new one
       const conversations = await invoke<Conversation[]>("get_conversations");
@@ -652,7 +658,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set((state) => ({
         conversations: [newConversation, ...state.conversations],
-        currentConversationId: newId,
         isLoading: false,
       }));
 
@@ -865,6 +870,24 @@ const applyTheme = (themeType: ThemeType, theme: Theme) => {
 
     // Load conversations
     await useChatStore.getState().loadConversations();
+    
+    // Clean up any empty conversations
+    const state = useChatStore.getState();
+    for (const conv of state.conversations) {
+      const messages = await invoke<Message[]>("load_conversation_messages", {
+        conversationId: conv.id,
+      });
+      if (messages.length === 0) {
+        await invoke("delete_conversation", { conversationId: conv.id });
+      }
+    }
+    
+    // Reload conversations after cleanup
+    await useChatStore.getState().loadConversations();
+    
+    // Create new conversation for this session
+    await useChatStore.getState().createConversation();
+    
     useChatStore.setState({ initialized: true });
   } catch (error) {
     console.error("Failed to initialize stores:", error);
