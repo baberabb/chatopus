@@ -1,4 +1,4 @@
-import * as React from "react";
+import React, { useCallback, useRef } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -7,12 +7,20 @@ import {
 } from "./ui/sidebar";
 import { useZustandTheme } from "../store";
 import { useRightSidebar } from "../contexts/RightSidebarContext";
-import { Pin } from "lucide-react";
+import { Pin, GripVertical } from "lucide-react";
 
 export function RightSidebar() {
   const { theme } = useZustandTheme();
-  const { isOpen, setIsOpen, isPinned, setPinned, onHoverStart, onHoverEnd } =
-    useRightSidebar();
+  const {
+    isOpen,
+    setIsOpen,
+    isPinned,
+    setPinned,
+    width,
+    setWidth,
+    onHoverStart,
+    onHoverEnd,
+  } = useRightSidebar();
 
   return (
     <>
@@ -31,12 +39,12 @@ export function RightSidebar() {
         <Sidebar
           side="right"
           collapsible="offcanvas"
-          className="hidden md:flex"
+          className="hidden md:flex transition-transform duration-500 ease-out"
           style={
             {
               backgroundColor: theme.surface,
               borderColor: theme.border,
-              "--sidebar-width": "200px",
+              "--sidebar-width": `${width}px`,
             } as React.CSSProperties
           }
         >
@@ -59,6 +67,31 @@ export function RightSidebar() {
               </button>
             </div>
           </SidebarHeader>
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize group flex items-center justify-center hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const startX = e.pageX;
+              const startWidth = width;
+
+              const handleMouseMove = (e: MouseEvent) => {
+                const delta = startX - e.pageX;
+                setWidth(startWidth + delta);
+              };
+
+              const handleMouseUp = () => {
+                document.removeEventListener("mousemove", handleMouseMove);
+                document.removeEventListener("mouseup", handleMouseUp);
+              };
+
+              document.addEventListener("mousemove", handleMouseMove);
+              document.addEventListener("mouseup", handleMouseUp);
+            }}
+          >
+            <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border bg-border">
+              <GripVertical className="h-2.5 w-2.5 text-background" />
+            </div>
+          </div>
           <SidebarContent>
             <div className="p-4">
               <h3 className="text-sm font-medium mb-2">Current Chat</h3>

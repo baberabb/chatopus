@@ -48,7 +48,7 @@ const ActionButton: React.FC<ActionButtonProps> = ({
 export const InputArea: React.FC<InputAreaProps> = React.memo(
   ({ onSend, isStreaming, isCancellable, onCancel }) => {
     const { theme } = useZustandTheme();
-    const { isOpen } = useRightSidebar();
+    const { isOpen, width } = useRightSidebar();
     const [attachments, setAttachments] = useState<FileAttachment[]>([]);
     const [input, setInput] = useState("");
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -135,8 +135,8 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
       <div
         className="absolute bottom-0 left-0 right-0 px-4 pb-2"
         style={{
-          right: isOpen ? "200px" : 0,
-          transition: "right 200ms linear",
+          right: isOpen ? `${width}px` : 0,
+          transition: "right 500ms ease-out",
         }}
       >
         {attachments.length > 0 && (

@@ -162,7 +162,7 @@ const StreamingMessage: React.FC<StreamingMessageProps> = React.memo(
 export function ChatContainer() {
   const { theme } = useZustandTheme();
   const { currentModel } = useModel();
-  const { isOpen, setIsOpen } = useRightSidebar();
+  const { isOpen, width } = useRightSidebar();
   const messageListRef = useRef<HTMLDivElement>(null);
   const { isStreaming } = useStreaming();
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -236,11 +236,11 @@ export function ChatContainer() {
   return (
     <ErrorBoundary>
       <div
-        className="flex flex-col h-full transition-[margin] duration-200 ease-linear"
+        className="flex flex-col h-full transition-[margin] duration-500 ease-out"
         style={{
           backgroundColor: theme.background,
           color: theme.text,
-          marginRight: isOpen ? "200px" : 0,
+          marginRight: isOpen ? `${width}px` : 0,
         }}
       >
         {/* Model header */}
