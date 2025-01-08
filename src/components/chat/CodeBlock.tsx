@@ -26,7 +26,8 @@
  */
 
 import React, { useMemo } from "react";
-import { Play, Copy } from "lucide-react";
+import { Play, Copy, Expand } from "lucide-react";
+import { useRightSidebar } from "../../contexts/RightSidebarContext";
 import SyntaxHighlighter from "react-syntax-highlighter/dist/esm/default-highlight";
 import { vs2015 } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { useZustandTheme } from "../../store";
@@ -103,12 +104,13 @@ const CodeBlockButton: React.FC<CodeBlockButtonProps> = ({
  * CodeBlock component for displaying and executing code
  * @component
  */
-export const CodeBlock: React.FC<CodeBlockProps> = ({
+const CodeBlock: React.FC<CodeBlockProps> = ({
   language,
   value: initialValue,
   isStreaming = false,
 }) => {
   const { theme } = useZustandTheme();
+  const { setIsOpen, setPinned } = useRightSidebar();
 
   // Initialize code editor state
   const {
@@ -124,7 +126,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   // Initialize code execution state
   const { isRunning, output, error, runCode } = useCodeExecution(
     code,
-    language,
+    language
   );
 
   const isExecutable = ["python", "html"].includes(language.toLowerCase());
@@ -144,7 +146,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
 
   const capitalizedLanguage = useMemo(
     () => language.charAt(0).toUpperCase() + language.slice(1),
-    [language],
+    [language]
   );
 
   return (
@@ -192,12 +194,36 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
               <div className="h-4 w-px bg-gray-700" aria-hidden="true" />
             </>
           )}
-          <CodeBlockButton
-            onClick={handleCopy}
-            icon={<Copy />}
-            label="Copy"
-            title="Copy code to clipboard"
-          />
+          <>
+            <CodeBlockButton
+              onClick={() => {
+                setIsOpen(true);
+                setPinned(true);
+                // Dispatch an event to notify the sidebar to show expanded code
+                window.dispatchEvent(
+                  new CustomEvent("showExpandedCode", {
+                    detail: {
+                      code,
+                      language,
+                      onCodeChange: (newCode: string) => {
+                        setCode(newCode);
+                      },
+                    },
+                  })
+                );
+              }}
+              icon={<Expand />}
+              label="Expand"
+              title="Show in sidebar"
+            />
+            <div className="h-4 w-px bg-gray-700" aria-hidden="true" />
+            <CodeBlockButton
+              onClick={handleCopy}
+              icon={<Copy />}
+              label="Copy"
+              title="Copy code to clipboard"
+            />
+          </>
         </div>
       </div>
 
@@ -273,3 +299,5 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
 };
 
 CodeBlock.displayName = "CodeBlock";
+
+export { CodeBlock };

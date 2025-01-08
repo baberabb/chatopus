@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useState, useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -8,9 +8,29 @@ import {
 import { useZustandTheme } from "../store";
 import { useRightSidebar } from "../contexts/RightSidebarContext";
 import { Pin, GripVertical } from "lucide-react";
+import { ExpandedCodeView } from "./chat/ExpandedCodeView";
+
+interface ExpandedCode {
+  code: string;
+  language: string;
+  onCodeChange: (newCode: string) => void;
+}
 
 export function RightSidebar() {
   const { theme } = useZustandTheme();
+  const [expandedCode, setExpandedCode] = useState<ExpandedCode | null>(null);
+
+  useEffect(() => {
+    const handleShowExpandedCode = (event: Event) => {
+      const customEvent = event as CustomEvent<ExpandedCode>;
+      setExpandedCode(customEvent.detail);
+    };
+
+    window.addEventListener("showExpandedCode", handleShowExpandedCode);
+    return () => {
+      window.removeEventListener("showExpandedCode", handleShowExpandedCode);
+    };
+  }, []);
   const {
     isOpen,
     setIsOpen,
@@ -93,12 +113,25 @@ export function RightSidebar() {
             </div>
           </div>
           <SidebarContent>
-            <div className="p-4">
-              <h3 className="text-sm font-medium mb-2">Current Chat</h3>
-              <div className="text-sm" style={{ color: theme.textSecondary }}>
-                Select a chat to view details
+            {expandedCode ? (
+              <ExpandedCodeView
+                code={expandedCode.code}
+                language={expandedCode.language}
+                onCodeChange={expandedCode.onCodeChange}
+                onClose={() => {
+                  setExpandedCode(null);
+                  setPinned(false);
+                  setIsOpen(false);
+                }}
+              />
+            ) : (
+              <div className="p-4">
+                <h3 className="text-sm font-medium mb-2">Current Chat</h3>
+                <div className="text-sm" style={{ color: theme.textSecondary }}>
+                  Select a chat to view details
+                </div>
               </div>
-            </div>
+            )}
           </SidebarContent>
         </Sidebar>
       </SidebarProvider>
