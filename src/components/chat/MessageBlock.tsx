@@ -78,14 +78,6 @@ export const MessageBlock: React.FC<MessageBlockProps> = ({
       {/* Avatar section */}
       <div className="w-10 flex-shrink-0 flex flex-col items-center">
         <UserAvatar user={message.role} />
-        {message.role === "assistant" && (
-          <span
-            className="text-xs mt-1 text-gray-500 whitespace-nowrap overflow-hidden text-ellipsis max-w-[80px]"
-            title={modelName}
-          >
-            {modelName || "Assistant"}
-          </span>
-        )}
       </div>
 
       {/* Message content section */}

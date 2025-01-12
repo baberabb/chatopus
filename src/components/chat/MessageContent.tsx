@@ -172,13 +172,13 @@ export const MessageContent: React.FC<MessageContentProps> = ({
         );
       },
     }),
-    [isStreaming],
+    [isStreaming]
   );
 
   // Format message content for display
   const displayContent = useMemo(
     () => formatContentBlocks(message.content),
-    [message.content],
+    [message.content]
   );
 
   return (
@@ -194,6 +194,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({
         >
           {formatMessageRole(message.role, message.model)}
         </span>
+        {/* Timestamp commented out - may be added back later
         <time
           className="text-xs"
           style={{ color: theme.textSecondary }}
@@ -201,6 +202,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({
         >
           {message.timestamp}
         </time>
+        */}
       </div>
 
       {message.attachments && message.attachments.length > 0 && (
