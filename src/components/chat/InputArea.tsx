@@ -133,10 +133,12 @@ export const InputArea: React.FC<InputAreaProps> = React.memo(
 
     return (
       <div
-        className="absolute bottom-0 left-0 right-0 px-4 pb-2"
+        className="fixed bottom-0 px-4 pb-2"
         style={{
+          left: 0,
           right: isOpen ? `${width}px` : 0,
           transition: "right 500ms ease-out",
+          width: "auto",
         }}
       >
         {attachments.length > 0 && (
