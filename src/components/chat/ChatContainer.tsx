@@ -45,6 +45,7 @@ import { MessageBlock } from "./MessageBlock";
 import { useChat } from "./useChat";
 import { JupyterConnect } from "../JupyterConnect";
 import { scrollToBottom } from "./utils";
+import { SidebarTrigger } from "../ui/sidebar";
 
 /**
  * Props for the StreamingInput component
@@ -207,7 +208,6 @@ export function ChatContainer() {
       // Smooth scroll during streaming
       scrollToBottom(messageListRef.current, true);
     } else {
-      // Add delay for assistant messages that were previously streaming
       if (!isLatestMessageFromUser && wasStreaming) {
         setTimeout(() => {
           scrollToBottom(messageListRef.current, true);
@@ -236,7 +236,7 @@ export function ChatContainer() {
   return (
     <ErrorBoundary>
       <div
-        className="flex flex-col h-full transition-[margin] duration-500 ease-out"
+        className="flex flex-col h-[100vh] transition-[margin] duration-500 ease-out"
         style={{
           backgroundColor: theme.background,
           color: theme.text,
@@ -245,19 +245,18 @@ export function ChatContainer() {
       >
         {/* Model header */}
         <div
-          className="flex-none h-10 flex items-center px-4 bg-opacity-80 backdrop-blur-sm"
+          className="flex-none h-10 flex items-center justify-between px-4 bg-opacity-80 backdrop-blur-sm"
           style={{
             backgroundColor: theme.surface,
             borderBottom: `1px solid ${theme.border}`,
           }}
         >
           <div className="flex items-center gap-4">
+            <SidebarTrigger className="flex items-center gap-1 px-2 py-1 text-sm rounded hover:bg-opacity-10 hover:bg-white transition-colors" />
             <span className="text-sm font-medium" style={{ color: theme.text }}>
               {currentModel?.name || "No model selected"}
             </span>
-            <div style={{ color: theme.text }}>
-              <JupyterConnect />
-            </div>
+            <JupyterConnect />
           </div>
         </div>
 
@@ -267,55 +266,56 @@ export function ChatContainer() {
         )}
 
         {/* Message list */}
-        <div
-          className="flex-1 min-h-0 overflow-y-auto pt-4 pb-24 chat-messages"
-          style={{ backgroundColor: theme.background }}
-          ref={messageListRef}
-          data-lenis-prevent
-        >
-          {isLoading ? (
-            <div className="flex justify-center items-center h-full">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex justify-center items-center h-full text-gray-500">
-              Start a new conversation
-            </div>
-          ) : (
-            messages.map((msg) => (
-              <StreamingMessage
-                key={msg.localIndex}
-                message={msg}
-                onReact={handleReact}
-                onEdit={handleEdit}
-                conversationId={currentConversationId}
-                modelName={currentModel?.name}
+        <div className="flex-1 overflow-hidden relative">
+          <div
+            className="absolute inset-0 overflow-y-auto pt-4 pb-32 chat-messages"
+            style={{ backgroundColor: theme.background }}
+            ref={messageListRef}
+            data-lenis-prevent
+          >
+            {isLoading ? (
+              <div className="flex justify-center items-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex justify-center items-center h-full text-gray-500">
+                Start a new conversation
+              </div>
+            ) : (
+              messages.map((msg) => (
+                <StreamingMessage
+                  key={msg.localIndex}
+                  message={msg}
+                  onReact={handleReact}
+                  onEdit={handleEdit}
+                  conversationId={currentConversationId}
+                  modelName={currentModel?.name}
+                />
+              ))
+            )}
+            {error && (
+              <ErrorDisplay
+                message={error}
+                onRetry={() => {
+                  // Retry last message
+                  const lastUserMessage = [...messages]
+                    .reverse()
+                    .find((msg) => msg.role === "user");
+                  if (lastUserMessage) {
+                    const content =
+                      typeof lastUserMessage.content === "string"
+                        ? lastUserMessage.content
+                        : lastUserMessage.content
+                            .map((block) => block.text || "")
+                            .join("\n");
+                    sendMessage(content);
+                  }
+                }}
               />
-            ))
-          )}
-          {error && (
-            <ErrorDisplay
-              message={error}
-              onRetry={() => {
-                // Retry last message
-                const lastUserMessage = [...messages]
-                  .reverse()
-                  .find((msg) => msg.role === "user");
-                if (lastUserMessage) {
-                  const content =
-                    typeof lastUserMessage.content === "string"
-                      ? lastUserMessage.content
-                      : lastUserMessage.content
-                          .map((block) => block.text || "")
-                          .join("\n");
-                  sendMessage(content);
-                }
-              }}
-            />
-          )}
+            )}
+          </div>
+          <StreamingInput onSend={sendMessage} onCancel={cancelMessage} />
         </div>
-
-        <StreamingInput onSend={sendMessage} onCancel={cancelMessage} />
 
         {/* Scroll to bottom button */}
         {showScrollButton && (

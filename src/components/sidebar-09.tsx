@@ -1,58 +1,53 @@
 import * as React from "react";
-import {
-  BadgeCheck,
-  Bell,
-  Command,
-  LogOut,
-  Sparkles,
-  Trash2,
-  Plus,
-} from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { Label } from "./ui/label";
+import { Command, Plus, Trash2 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
+  SidebarGroup,
   SidebarHeader,
-  SidebarInput,
-  SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarInset,
   SidebarProvider,
   SidebarTrigger,
-  useSidebar,
 } from "./ui/sidebar";
-import { Switch } from "./ui/switch";
 import { ChatContainer } from "./chat/ChatContainer";
 import { RightSidebar } from "./RightSidebar";
-import { SidebarNavigation } from "./SidebarNavigation";
 import { TrashContent } from "./TrashContent";
 import Settings from "./settings/Settings";
 import { ModelSettings } from "./settings/ModelSettings";
-import { ThemeToggle } from "./ThemeToggle";
-import { CaretSortIcon, ComponentPlaceholderIcon } from "@radix-ui/react-icons";
 import { useZustandTheme, useChatStore } from "../store";
 import { Conversation } from "../types";
 import ErrorBoundary from "./ErrorBoundary";
 import { formatContentBlocks } from "./chat/utils";
 
+// Navigation data structure
 const data = {
-  user: {
-    name: "Alex Chen",
-    email: "alex@example.com",
-    avatar: "/avatars/alex.jpg",
-  },
+  navMain: [
+    {
+      title: "Chats",
+      url: "#",
+      items: [] as Conversation[], // Will be populated with conversations
+    },
+    {
+      title: "Settings",
+      url: "#",
+      items: [
+        {
+          title: "Model Settings",
+          url: "#model",
+        },
+        {
+          title: "App Settings",
+          url: "#settings",
+        },
+      ],
+    },
+  ],
 };
 
 export default function Page() {
@@ -63,10 +58,9 @@ export default function Page() {
 
   return (
     <SidebarProvider
-      defaultOpen={false}
       style={
         {
-          "--sidebar-width": "250px",
+          "--sidebar-width": "19rem",
           backgroundColor: theme.background,
           color: theme.text,
           "--border-color": theme.border,
@@ -74,40 +68,36 @@ export default function Page() {
       }
     >
       <ErrorBoundary>
-        <AppSidebar setActiveContent={setActiveContent} />
+        <AppSidebar />
       </ErrorBoundary>
-      <SidebarInset className="flex flex-col h-[calc(100vh-64px)] relative">
-        {activeContent === "inbox" ? (
-          <ChatContainer />
-        ) : activeContent === "trash" ? (
-          <TrashContent />
-        ) : activeContent === "model" ? (
-          <div className="p-6 max-w-2xl mx-auto">
-            <h2
-              className="text-2xl font-bold mb-6"
-              style={{ color: theme.text }}
-            >
-              Model Settings
-            </h2>
-            <ModelSettings />
-          </div>
-        ) : (
-          <Settings />
-        )}
-        <RightSidebar />
+      <SidebarInset>
+        <div className="flex flex-1 flex-col">
+          {activeContent === "inbox" ? (
+            <ChatContainer />
+          ) : activeContent === "trash" ? (
+            <TrashContent />
+          ) : activeContent === "model" ? (
+            <div className="p-6 max-w-2xl mx-auto">
+              <h2
+                className="text-2xl font-bold mb-6"
+                style={{ color: theme.text }}
+              >
+                Model Settings
+              </h2>
+              <ModelSettings />
+            </div>
+          ) : (
+            <Settings />
+          )}
+          <RightSidebar />
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
 }
 
-interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  setActiveContent: (content: "inbox" | "trash" | "settings" | "model") => void;
-}
-
-function AppSidebar({ setActiveContent }: AppSidebarProps) {
-  const { setOpen } = useSidebar();
+function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { theme } = useZustandTheme();
-  // Use specific selectors to avoid unnecessary rerenders
   const conversations = useChatStore((state) => state.conversations);
   const currentConversationId = useChatStore(
     (state) => state.currentConversationId
@@ -119,23 +109,25 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
     (state) => state.setCurrentConversationId
   );
   const loadConversations = useChatStore((state) => state.loadConversations);
-  // const loadConversation = useChatStore((state) => state.loadConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
   const createConversation = useChatStore((state) => state.createConversation);
 
-  // TODO: Empty dependency
   // Load conversations on mount
   React.useEffect(() => {
     loadConversations();
-  }, []); // Empty dependency array since loadConversations is stable from store
+  }, []);
+
+  // Update navigation data with conversations
+  React.useEffect(() => {
+    if (conversations) {
+      data.navMain[0].items = conversations;
+    }
+  }, [conversations]);
 
   // Show loading state while store is initializing
-  if (!initialized) {
+  if (!isLoading && !initialized) {
     return (
-      <Sidebar
-        collapsible="icon"
-        className="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row"
-      >
+      <Sidebar variant="floating" {...props}>
         <div className="flex justify-center items-center h-full">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
         </div>
@@ -145,279 +137,101 @@ function AppSidebar({ setActiveContent }: AppSidebarProps) {
 
   const handleChatSelect = async (chatId: number) => {
     try {
-      // setCurrentConversationId will call loadConversation internally
       await setCurrentConversationId(chatId);
-      setOpen(true);
     } catch (err) {
       console.error("Error loading conversation:", err);
-      // Error state is already set by the store actions
     }
   };
 
   const handleDelete = async (e: React.MouseEvent, chatId: number) => {
-    e.stopPropagation(); // Prevent chat selection when clicking delete
+    e.stopPropagation();
     try {
       await deleteConversation(chatId);
-      // If we're deleting the current conversation, create a new one
       if (currentConversationId === chatId) {
         const newId = await createConversation();
-        // No need to call loadConversations since createConversation handles it
         await setCurrentConversationId(newId);
       }
     } catch (err) {
       console.error("Error deleting conversation:", err);
-      // Error state is already set by the store actions
     }
   };
 
   const handleNewChat = async () => {
     try {
-      // Create conversation and update local state
-      const newId: number = await createConversation();
-      // Now that we know the conversation exists, set it as current
+      const newId = await createConversation();
       await setCurrentConversationId(newId);
-      // Open the sidebar to show the new conversation
-      setOpen(true);
     } catch (err) {
       console.error("Error creating new chat:", err);
-      // Error state is already set by store actions
     }
   };
 
   return (
-    <Sidebar
-      collapsible="icon"
-      className="overflow-hidden [&>[data-sidebar=sidebar]]:flex-row"
-    >
-      <Sidebar
-        collapsible="none"
-        className="!w-[calc(var(--sidebar-width-icon)_+_1px)] border-r"
-        style={{
-          backgroundColor: theme.surface,
-          borderColor: theme.border,
-        }}
-      >
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarTrigger>
-                <SidebarMenuButton size="lg" className="md:h-8 md:p-0">
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                    <Command className="size-4" />
-                  </div>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">ChatArchive</span>
-                    <span className="truncate text-xs">Personal</span>
+    <Sidebar variant="floating" {...props}>
+      <SidebarHeader className="p-4">
+        <div className="flex items-center gap-2">
+          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+            <Command className="size-4" />
+          </div>
+          <div className="flex flex-col gap-0.5 leading-none">
+            <span className="font-semibold">ChatArchive</span>
+            <span className="">v1.0.0</span>
+          </div>
+        </div>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarMenu className="gap-2">
+            {data.navMain.map((section) => (
+              <SidebarMenuItem key={section.title}>
+                <SidebarMenuButton asChild>
+                  <div className="font-medium flex justify-between items-center w-full">
+                    {section.title}
+                    {section.title === "Chats" && (
+                      <button
+                        onClick={handleNewChat}
+                        className="flex items-center gap-1 text-sm px-2 py-1 rounded hover:bg-sidebar-accent transition-colors"
+                      >
+                        <Plus className="h-4 w-4" />
+                        New
+                      </button>
+                    )}
                   </div>
                 </SidebarMenuButton>
-              </SidebarTrigger>
-            </SidebarMenuItem>
+                {section.items?.length ? (
+                  <SidebarMenuSub className="ml-0 border-l-0 px-1.5">
+                    {section.items.map((item: any) => (
+                      <SidebarMenuSubItem key={item.id || item.title}>
+                        <SidebarMenuSubButton
+                          asChild
+                          isActive={item.id === currentConversationId}
+                          onClick={() => item.id && handleChatSelect(item.id)}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span>
+                              {item.id
+                                ? formatContentBlocks(item.title) || "New Chat"
+                                : item.title}
+                            </span>
+                            {item.id && (
+                              <button
+                                onClick={(e) => handleDelete(e, item.id)}
+                                className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity"
+                                title="Delete conversation"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                  </SidebarMenuSub>
+                ) : null}
+              </SidebarMenuItem>
+            ))}
           </SidebarMenu>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarNavigation
-            setActiveContent={setActiveContent}
-            setOpen={setOpen}
-          />
-        </SidebarContent>
-        <SidebarFooter>
-          <NavUser user={data.user} />
-        </SidebarFooter>
-      </Sidebar>
-
-      <Sidebar
-        collapsible="none"
-        className="hidden flex-1 md:flex"
-        style={{
-          backgroundColor: theme.surface,
-          borderColor: theme.border,
-        }}
-      >
-        <SidebarHeader
-          className="gap-3.5 border-b p-4"
-          style={{ borderColor: theme.border }}
-        >
-          <div className="flex w-full items-center justify-between">
-            <div className="text-base font-medium">Chat History</div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={handleNewChat}
-                className="flex items-center gap-1 text-sm px-2 py-1 rounded hover:bg-sidebar-accent transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                New Chat
-              </button>
-              <Label className="flex items-center gap-2 text-sm">
-                <span>Favorites</span>
-                <Switch className="shadow-none" />
-              </Label>
-              <ThemeToggle />
-            </div>
-          </div>
-          <SidebarInput placeholder="Search conversations..." />
-        </SidebarHeader>
-        <SidebarContent>
-          <div className="px-0">
-            {isLoading ? (
-              <div className="flex justify-center items-center p-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
-              </div>
-            ) : error ? (
-              <div className="p-4 text-red-500 text-sm">{error}</div>
-            ) : conversations.length === 0 ? (
-              <div className="p-4 text-sm text-gray-500">
-                No conversations yet
-              </div>
-            ) : (
-              conversations.map((chat: Conversation) => (
-                <div
-                  key={chat.id}
-                  className={`group relative w-full text-left border-b last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-                    currentConversationId === chat.id ? "bg-sidebar-accent" : ""
-                  }`}
-                  style={{ borderColor: theme.border }}
-                >
-                  <div className="w-full p-4">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(e, chat.id);
-                      }}
-                      className="absolute left-2 top-4 p-2 hover:text-red-500 transition-colors"
-                      title="Delete conversation"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-
-                    <button
-                      // TODO: remove padding later
-                      className="w-full flex flex-col items-start gap-2 text-left pl-8"
-                      onClick={() => handleChatSelect(chat.id)}
-                    >
-                      <div className="flex w-full items-center gap-2">
-                        <span className="font-medium">
-                          {formatContentBlocks(chat.title) || "New Chat"}
-                        </span>
-                        <span className="ml-auto text-xs">
-                          {chat.timestamp}
-                        </span>
-                      </div>
-                      <div
-                        className="flex w-full items-center gap-2 text-xs"
-                        style={{ color: theme.textSecondary }}
-                      >
-                        <span>{chat.model}</span>
-                        <span>•</span>
-                        <span>{chat.messageCount} messages</span>
-                      </div>
-                      <span
-                        className="line-clamp-2 w-[200px] whitespace-break-spaces text-xs"
-                        style={{ color: theme.textSecondary }}
-                      >
-                        {formatContentBlocks(chat.preview) || ""}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </SidebarContent>
-      </Sidebar>
+        </SidebarGroup>
+      </SidebarContent>
     </Sidebar>
-  );
-}
-
-function NavUser({
-  user,
-}: {
-  user: {
-    name: string;
-    email: string;
-    avatar: string;
-  };
-}) {
-  const { isMobile } = useSidebar();
-  const { theme } = useZustandTheme();
-
-  return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground md:h-8 md:p-0"
-            >
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">AC</AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{user.name}</span>
-                <span
-                  className="truncate text-xs"
-                  style={{ color: theme.textSecondary }}
-                >
-                  {user.email}
-                </span>
-              </div>
-              <CaretSortIcon className="ml-auto size-4" />
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-            side={isMobile ? "bottom" : "right"}
-            align="end"
-            sideOffset={4}
-          >
-            <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">AC</AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">{user.name}</span>
-                  <span
-                    className="truncate text-xs"
-                    style={{ color: theme.textSecondary }}
-                  >
-                    {user.email}
-                  </span>
-                </div>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Upgrade to Pro
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheck className="mr-2 h-4 w-4" />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <ComponentPlaceholderIcon className="mr-2 h-4 w-4" />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Bell className="mr-2 h-4 w-4" />
-                Notifications
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOut className="mr-2 h-4 w-4" />
-              Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarMenuItem>
-    </SidebarMenu>
   );
 }
