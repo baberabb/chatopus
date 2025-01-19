@@ -77,10 +77,12 @@ listen("stream-complete", () => {
       status: "complete" as const
     };
 
-    // Update state with completed message
-    useChatStore.setState({ 
-      messages: updatedMessages,
-      isStreaming: false 
+    // Batch state updates to prevent layout shifts
+    requestAnimationFrame(() => {
+      useChatStore.setState({ 
+        messages: updatedMessages,
+        isStreaming: false 
+      });
     });
   }
 });
